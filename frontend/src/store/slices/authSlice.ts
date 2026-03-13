@@ -61,12 +61,24 @@ export const logout = createAsyncThunk('auth/logout', async () => {
 
 export const updateProfile = createAsyncThunk(
   'auth/updateProfile',
-  async ({ id, data }: { id: string; data: { name: string; email: string } }, { rejectWithValue }) => {
+  async ({ id, data }: { id: string; data: { name: string; email: string; designation?: string | null } }, { rejectWithValue }) => {
     try {
       const response = await api.put(`/users/${id}`, data);
       return response.data.user;
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to update profile');
+    }
+  }
+);
+
+export const updatePassword = createAsyncThunk(
+  'auth/updatePassword',
+  async ({ id, data }: { id: string; data: any }, { rejectWithValue }) => {
+    try {
+      const response = await api.patch(`/users/${id}/password`, data);
+      return response.data;
+    } catch (error: any) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to update password');
     }
   }
 );
@@ -131,6 +143,10 @@ const authSlice = createSlice({
         state.user = null;
         state.isAuthenticated = false;
         state.isLoading = false;
+      })
+      // Update Profile
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.user = action.payload;
       });
   },
 });

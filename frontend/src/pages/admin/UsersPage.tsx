@@ -6,6 +6,7 @@ import { useAppDispatch, useAppSelector } from '../../hooks/useRedux';
 import {
   fetchUsers,
   createUser,
+  updateUser,
   updateUserRole,
   updateUserStatus,
 } from '../../store/slices/userSlice';
@@ -15,7 +16,7 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Badge from '../../components/ui/Badge';
 import Avatar from '../../components/Avatar';
-import { Plus, Shield, ShieldOff, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Shield, ShieldOff, CheckCircle, XCircle, Edit, Edit2 } from 'lucide-react';
 import type { User } from '../../types';
 
 const createUserSchema = z.object({
@@ -23,25 +24,44 @@ const createUserSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   role: z.enum(['admin', 'user']),
+  designation: z.string().max(100).optional().nullable(),
+});
+
+const updateUserSchema = z.object({
+  name: z.string().min(2, 'Name is required'),
+  email: z.string().email('Invalid email address'),
+  designation: z.string().max(100).optional().nullable(),
 });
 
 type CreateUserForm = z.infer<typeof createUserSchema>;
+type UpdateUserForm = z.infer<typeof updateUserSchema>;
 
 const UsersPage: React.FC = () => {
   const dispatch = useAppDispatch();
   const { users, isLoading } = useAppSelector((state) => state.users);
   const { user: currentUser } = useAppSelector((state) => state.auth);
-  
+
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+
   const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
+    register: registerCreate,
+    handleSubmit: handleSubmitCreate,
+    reset: resetCreate,
+    formState: { errors: createErrors, isSubmitting: isSubmittingCreate },
   } = useForm<CreateUserForm>({
     resolver: zodResolver(createUserSchema),
-    defaultValues: { role: 'user' },
+    defaultValues: { role: 'user', designation: '' },
+  });
+
+  const {
+    register: registerEdit,
+    handleSubmit: handleSubmitEdit,
+    reset: resetEdit,
+    formState: { errors: editErrors, isSubmitting: isSubmittingEdit },
+  } = useForm<UpdateUserForm>({
+    resolver: zodResolver(updateUserSchema),
   });
 
   useEffect(() => {
@@ -52,7 +72,27 @@ const UsersPage: React.FC = () => {
     const action = await dispatch(createUser(data));
     if (createUser.fulfilled.match(action)) {
       setIsCreateModalOpen(false);
-      reset();
+      resetCreate();
+    }
+  };
+
+  const onEditClick = (user: User) => {
+    setEditingUser(user);
+    resetEdit({
+      name: user.name,
+      email: user.email,
+      designation: user.designation || '',
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const onSubmitEdit = async (data: UpdateUserForm) => {
+    if (editingUser) {
+      const action = await dispatch(updateUser({ id: editingUser.id, data }));
+      if (updateUser.fulfilled.match(action)) {
+        setIsEditModalOpen(false);
+        setEditingUser(null);
+      }
     }
   };
 
@@ -90,6 +130,7 @@ const UsersPage: React.FC = () => {
           <TableHeader>
             <TableRow>
               <TableHead>User</TableHead>
+              <TableHead>Designation</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Joined</TableHead>
@@ -123,6 +164,9 @@ const UsersPage: React.FC = () => {
                       </div>
                     </div>
                   </TableCell>
+                  <TableCell className="text-sm text-gray-600 italic">
+                    {user.designation || '—'}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={user.role === 'admin' ? 'indigo' : 'gray'}>
                       {user.role}
@@ -136,7 +180,16 @@ const UsersPage: React.FC = () => {
                   <TableCell className="text-sm text-gray-500">
                     {new Date(user.createdAt).toLocaleDateString()}
                   </TableCell>
-                  <TableCell className="text-right space-x-2">
+                  <TableCell className="text-right space-x-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEditClick(user)}
+                      title="Edit User"
+                      className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                    >
+                      <Edit size={16} />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -169,49 +222,95 @@ const UsersPage: React.FC = () => {
         isOpen={isCreateModalOpen}
         onClose={() => {
           setIsCreateModalOpen(false);
-          reset();
+          resetCreate();
         }}
         title="Create New User"
       >
-        <form id="create-user-form" onSubmit={handleSubmit(onSubmitCreate)} className="space-y-4">
+        <form id="create-user-form" onSubmit={handleSubmitCreate(onSubmitCreate)} className="space-y-4">
           <Input
             label="Full Name"
             placeholder="Jane Doe"
-            {...register('name')}
-            error={errors.name?.message}
+            {...registerCreate('name')}
+            error={createErrors.name?.message}
           />
           <Input
             type="email"
             label="Email Address"
             placeholder="jane@example.com"
-            {...register('email')}
-            error={errors.email?.message}
+            {...registerCreate('email')}
+            error={createErrors.email?.message}
+          />
+          <Input
+            label="Designation"
+            placeholder="Project Manager"
+            {...registerCreate('designation')}
+            error={createErrors.designation?.message}
           />
           <Input
             type="password"
             label="Temporary Password"
             placeholder="••••••••"
-            {...register('password')}
-            error={errors.password?.message}
+            {...registerCreate('password')}
+            error={createErrors.password?.message}
           />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
             <select
-              {...register('role')}
+              {...registerCreate('role')}
               className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             >
               <option value="user">User</option>
               <option value="admin">Admin</option>
             </select>
-            {errors.role && <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>}
+            {createErrors.role && <p className="mt-1 text-sm text-red-600">{createErrors.role.message}</p>}
           </div>
 
           <div className="mt-6 flex justify-end gap-3">
             <Button variant="secondary" onClick={() => setIsCreateModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" isLoading={isSubmitting}>
+            <Button type="submit" isLoading={isSubmittingCreate}>
               Create User
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => {
+          setIsEditModalOpen(false);
+          setEditingUser(null);
+        }}
+        title="Edit User"
+      >
+        <form onSubmit={handleSubmitEdit(onSubmitEdit)} className="space-y-4">
+          <Input
+            label="Full Name"
+            placeholder="Jane Doe"
+            {...registerEdit('name')}
+            error={editErrors.name?.message}
+          />
+          <Input
+            type="email"
+            label="Email Address"
+            placeholder="jane@example.com"
+            {...registerEdit('email')}
+            error={editErrors.email?.message}
+          />
+          <Input
+            label="Designation"
+            placeholder="Project Manager"
+            {...registerEdit('designation')}
+            error={editErrors.designation?.message}
+          />
+
+          <div className="mt-6 flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setIsEditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" isLoading={isSubmittingEdit}>
+              Update User
             </Button>
           </div>
         </form>

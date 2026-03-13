@@ -41,6 +41,7 @@ model User {
   passwordHash String   @map("password_hash") @db.VarChar(255)
   role         Role     @default(user)
   avatarColor  String   @default("#6366f1") @map("avatar_color") @db.VarChar(7)
+  designation  String?  @db.VarChar(100)
   isActive     Boolean  @default(true) @map("is_active")
   resetToken       String?  @map("reset_token") @db.VarChar(255)
   resetTokenExpiry DateTime? @map("reset_token_expiry")

@@ -151,7 +151,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ taskId, isOpen, onClo
   const isAdmin = currentUser?.role === 'admin';
   const isOwner = currentProject?.ownerId === currentUser?.id;
   const isAssignee = task.assignedTo === currentUser?.id;
-  const canEdit = isAdmin || isOwner || isAssignee;
+  const isCreator = task.createdBy === currentUser?.id;
+  const canEdit = isAdmin || isOwner || isAssignee || isCreator;
+  const canDelete = isAdmin || isOwner || isCreator;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Task Details: ${task.title}`}>
@@ -317,8 +319,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ taskId, isOpen, onClo
                 )}
              </div>
 
-             {/* Delete Task button for Admins/Owners */}
-             {(isAdmin || isOwner) && (
+             {/* Delete Task button for Admins/Owners/Creators */}
+             {canDelete && (
                 <div className="pt-4 mt-4 border-t border-gray-200">
                    <Button 
                       variant="ghost" 

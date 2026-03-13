@@ -143,6 +143,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         email: user.email,
         role: user.role,
         avatarColor: user.avatarColor,
+        designation: user.designation,
       },
       accessToken,
     });
@@ -302,6 +303,7 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
         email: true,
         role: true,
         avatarColor: true,
+        designation: true,
         isActive: true,
         createdAt: true,
       },

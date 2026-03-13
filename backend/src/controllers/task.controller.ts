@@ -54,8 +54,8 @@ export const getTaskById = async (req: AuthRequest, res: Response): Promise<void
     const task = await prisma.task.findUnique({
       where: { id },
       include: {
-        assignee: { select: { id: true, name: true, email: true, avatarColor: true } },
-        creator: { select: { id: true, name: true, email: true, avatarColor: true } },
+        assignee: { select: { id: true, name: true, email: true, avatarColor: true, designation: true } },
+        creator: { select: { id: true, name: true, email: true, avatarColor: true, designation: true } },
         project: { select: { id: true, name: true } },
         comments: {
           include: { user: { select: { id: true, name: true, avatarColor: true } } },
@@ -116,8 +116,8 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
         position: (maxPosition?.position ?? -1) + 1,
       },
       include: {
-        assignee: { select: { id: true, name: true, avatarColor: true } },
-        creator: { select: { id: true, name: true, avatarColor: true } },
+        assignee: { select: { id: true, name: true, avatarColor: true, designation: true } },
+        creator: { select: { id: true, name: true, avatarColor: true, designation: true } },
       },
     });
 
@@ -332,8 +332,8 @@ export const updateTaskPosition = async (req: AuthRequest, res: Response): Promi
       where: { id },
       data: { status, position },
       include: {
-        assignee: { select: { id: true, name: true, avatarColor: true } },
-        creator: { select: { id: true, name: true, avatarColor: true } },
+        assignee: { select: { id: true, name: true, avatarColor: true, designation: true } },
+        creator: { select: { id: true, name: true, avatarColor: true, designation: true } },
       },
     });
 

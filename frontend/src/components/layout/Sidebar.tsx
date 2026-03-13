@@ -48,14 +48,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
 
   return (
     <aside
-      className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 flex flex-col transition-all duration-300 z-40 ${
-        collapsed ? 'w-[68px]' : 'w-[240px]'
-      }`}
+      className={`fixed top-0 left-0 h-screen bg-white border-r border-gray-200 flex flex-col transition-all duration-300 z-40 ${collapsed ? 'w-[68px]' : 'w-[240px]'
+        }`}
     >
       {/* Logo */}
       <div className="flex items-center justify-between px-4 h-16 border-b border-gray-200">
         {!collapsed && (
-          <span className="text-lg font-bold text-indigo-600 tracking-tight">PM App</span>
+          <span className="text-lg font-bold text-indigo-600 tracking-tight">Eyelevel PM</span>
         )}
         <button
           onClick={onToggle}
@@ -73,10 +72,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             to={link.to}
             end={link.to === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-indigo-50 text-indigo-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${isActive
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
               } ${collapsed ? 'justify-center' : ''}`
             }
           >

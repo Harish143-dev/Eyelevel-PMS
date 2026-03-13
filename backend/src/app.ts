@@ -16,6 +16,7 @@ import commentRoutes from './routes/comment.routes';
 import attachmentRoutes from './routes/attachment.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import activityRoutes from './routes/activity.routes';
+import { startCleanupJob } from './services/cleanup.service';
 
 const app = express();
 const server = createServer(app);
@@ -62,6 +63,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 });
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
+
+// Start background jobs
+startCleanupJob();
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

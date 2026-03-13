@@ -19,6 +19,7 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
         email: true,
         role: true,
         avatarColor: true,
+        designation: true,
         isActive: true,
         createdAt: true,
       },
@@ -44,6 +45,7 @@ export const getUserById = async (req: AuthRequest, res: Response): Promise<void
         email: true,
         role: true,
         avatarColor: true,
+        designation: true,
         isActive: true,
         createdAt: true,
       },
@@ -86,6 +88,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
         email,
         passwordHash,
         role: role || 'user',
+        designation: req.body.designation || null,
         avatarColor,
       },
       select: {
@@ -94,6 +97,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
         email: true,
         role: true,
         avatarColor: true,
+        designation: true,
         isActive: true,
         createdAt: true,
       },
@@ -112,7 +116,7 @@ export const createUser = async (req: AuthRequest, res: Response): Promise<void>
 export const updateUser = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const id = req.params.id as string;
-    const { name, email } = req.body;
+    const { name, email, designation } = req.body;
 
     // Users can only update themselves, admins can update anyone
     if (req.user!.role !== 'admin' && req.user!.id !== id) {
@@ -122,13 +126,14 @@ export const updateUser = async (req: AuthRequest, res: Response): Promise<void>
 
     const user = await prisma.user.update({
       where: { id },
-      data: { name, email },
+      data: { name, email, designation },
       select: {
         id: true,
         name: true,
         email: true,
         role: true,
         avatarColor: true,
+        designation: true,
         isActive: true,
         createdAt: true,
       },
@@ -209,6 +214,42 @@ export const updateUserStatus = async (req: AuthRequest, res: Response): Promise
     res.json({ user });
   } catch (error) {
     console.error('Update status error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+// PATCH /api/users/:id/password
+export const updatePassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    const { currentPassword, newPassword } = req.body;
+
+    if (req.user!.id !== id) {
+      res.status(403).json({ message: 'Not allowed to change another user\'s password' });
+      return;
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      res.status(401).json({ message: 'Current password is incorrect' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Update password error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
