@@ -9,7 +9,7 @@ import path from 'path';
 
 dotenv.config();
 
-const CLIENT_URL = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, '') : 'http://localhost:5173';
+const CLIENT_URL = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, '') : 'https://eyelevel-pms.vercel.app';
 console.log(`[Config] Allowed Client Origin: ${CLIENT_URL}`);
 
 import { initSocket } from './config/socket';
@@ -70,16 +70,14 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'", process.env.CLIENT_URL || 'http://localhost:5173'],
+      connectSrc: ["'self'", CLIENT_URL],
     },
   } : false, // Disabled in development for hot-reload compatibility
 }));
 app.use(morgan('short'));
 
-const corsOrigin = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, '') : 'http://localhost:5173';
-
 app.use(cors({
-  origin: corsOrigin,
+  origin: CLIENT_URL,
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
