@@ -12,8 +12,8 @@ dotenv.config();
 const CLIENT_URL = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, '') : 'https://eyelevel-pms.vercel.app';
 console.log(`[Config] Allowed Client Origin: ${CLIENT_URL}`);
 
+import prisma from './config/db';
 import { initSocket } from './config/socket';
-// ... (rest of imports remains the same)
 
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
@@ -84,6 +84,18 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Debugging Middleware (Only in Production to see what's reaching Render)
+if (process.env.NODE_ENV === 'production' || true) {
+  app.use((req, _res, next) => {
+    if (req.path.includes('/api/auth') || req.path.includes('/api/tenant')) {
+      console.log(`[Debug] ${req.method} ${req.path}`);
+      console.log(`[Debug] Headers:`, JSON.stringify(req.headers, null, 2));
+      console.log(`[Debug] Body Keys:`, Object.keys(req.body || {}));
+    }
+    next();
+  });
+}
+
 // Global rate limiting for mutation requests (POST/PUT/DELETE)
 app.use('/api', mutationLimiter);
 
@@ -92,8 +104,21 @@ const uploadDir = process.env.UPLOAD_DIR || './uploads';
 // app.use('/uploads', express.static(path.resolve(uploadDir)));
 
 // API Routes
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  let dbStatus = 'unknown';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (error: any) {
+    dbStatus = `error: ${error.message}`;
+    console.error('[Health] DB Connection failed:', error);
+  }
+  
+  res.json({ 
+    status: 'ok', 
+    database: dbStatus,
+    timestamp: new Date().toISOString() 
+  });
 });
 
 // Tenant branding resolution (Public)

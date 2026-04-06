@@ -46,8 +46,18 @@ const slugify = (text: string) => {
 export const register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const { name, email, password, companyName } = req.body;
+    
+    // Detailed Production Logging
+    console.log('[Register] Request Received:', { 
+      hasName: !!name, 
+      hasEmail: !!email, 
+      hasPassword: !!password, 
+      hasCompanyName: !!companyName,
+      bodyKeys: Object.keys(req.body || {})
+    });
 
     if (!name || !email || !password || !companyName) {
+      console.warn('[Register] Missing required fields in request body');
       res.status(400).json({ message: 'Name, email, password, and workspace name are required' });
       return;
     }
