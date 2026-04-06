@@ -14,8 +14,9 @@ class SocketService {
     if (!this.socket) {
       const token = localStorage.getItem('accessToken');
       
-      this.socket = io(import.meta.env.VITE_API_URL || 'http://localhost:5000', {
+      this.socket = io(import.meta.env.VITE_API_URL || window.location.origin, {
         auth: { token },
+        path: import.meta.env.VITE_API_URL ? '/socket.io' : '/api/socket.io', // Adjust path based on proxy or direct connect
         transports: ['websocket'],
         reconnection: true,
       });

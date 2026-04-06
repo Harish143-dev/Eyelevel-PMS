@@ -51,6 +51,11 @@ const server = createServer(app);
 // Initialize Socket.io
 initSocket(server);
 
+// TRUST PROXY (required for Render/Heroku/Vercel load balancers to see correct IP)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Security Middleware
 app.use(helmet({
   contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
