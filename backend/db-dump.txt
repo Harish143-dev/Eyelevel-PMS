@@ -1,0 +1,7 @@
+--- Custom Priorities ---
+1. [8049072b-63dd-4490-bf27-49b572c58fc0] Low (00d3537c-0bb7-4498-855a-338af1eff244)
+2. [8049072b-63dd-4490-bf27-49b572c58fc0] Medium (1375aa69-93b8-48cf-904f-7814a6d74666)
+3. [8049072b-63dd-4490-bf27-49b572c58fc0] High (d34cc245-dbf3-49fa-a0d4-aba301c30fdb)
+4. [8049072b-63dd-4490-bf27-49b572c58fc0] Urgent (7b153536-d050-4a4d-8072-98ed1ffb1115)
+
+--- Custom Statuses ---

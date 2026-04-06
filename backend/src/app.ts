@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import path from 'path';
@@ -16,7 +18,32 @@ import commentRoutes from './routes/comment.routes';
 import attachmentRoutes from './routes/attachment.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import activityRoutes from './routes/activity.routes';
-import { startCleanupJob } from './services/cleanup.service';
+import notificationRoutes from './routes/notification.routes';
+import adminRoutes from './routes/admin.routes';
+import todoRoutes from './routes/todo.routes';
+import searchRoutes from './routes/search.routes';
+import timeRoutes from './routes/time.routes';
+import analyticsRoutes from './routes/analytics.routes';
+import departmentRoutes from './routes/department.routes';
+import milestoneRoutes from './routes/milestone.routes';
+import chatRoutes from './routes/chat.routes';
+import leaveRoutes from './routes/leave.routes';
+import templateRoutes from './routes/template.routes';
+import documentRoutes from './routes/document.routes';
+import clientRoutes from './routes/client.routes';
+import payrollRoutes from './routes/payroll.routes';
+import performanceRoutes from './routes/performance.routes';
+import sessionRoutes from './routes/session.routes';
+import activityTrackingRoutes from './routes/activityTracking.routes';
+import onboardingRoutes from './routes/onboarding.routes';
+import companyRoutes from './routes/company.routes';
+import monitoringRoutes from './routes/monitoring.routes';
+import workflowRoutes from './routes/workflow.routes';
+import customFieldRoutes from './routes/customField.routes';
+import dataRoutes from './routes/data.routes';
+import tenantRoutes from './routes/tenant.routes';
+import { initCronJobs } from './services/cron.service';
+import { authLimiter, mutationLimiter, sensitiveLimiter } from './middleware/rateLimit.middleware';
 
 const app = express();
 const server = createServer(app);
@@ -24,48 +51,94 @@ const server = createServer(app);
 // Initialize Socket.io
 initSocket(server);
 
-// Middleware
+// Security Middleware
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", process.env.CLIENT_URL || 'http://localhost:5173'],
+    },
+  } : false, // Disabled in development for hot-reload compatibility
+}));
+app.use(morgan('short'));
+
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Global rate limiting for mutation requests (POST/PUT/DELETE)
+app.use('/api', mutationLimiter);
+
 // Serve uploaded files
 const uploadDir = process.env.UPLOAD_DIR || './uploads';
-app.use('/uploads', express.static(path.resolve(uploadDir)));
+// app.use('/uploads', express.static(path.resolve(uploadDir)));
 
 // API Routes
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Tenant branding resolution (Public)
+app.use('/api/tenant', tenantRoutes);
+
 app.use('/api/auth', authRoutes);
+
+
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api', taskRoutes); // task routes have both /projects/:id/tasks and /tasks/:id
 app.use('/api', commentRoutes);
-app.use('/api', attachmentRoutes);
+// app.use('/api', attachmentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/activity', activityRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/todos', todoRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/time', timeRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/departments', departmentRoutes);
+app.use('/api/projects/:projectId/milestones', milestoneRoutes);
+app.use('/api/chat', chatRoutes);
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+app.use('/api/leaves', leaveRoutes);
+app.use('/api/templates', templateRoutes);
+app.use('/api', documentRoutes); // handles /api/projects/:id/documents and /api/documents/:id
+app.use('/api/clients', clientRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/performance', performanceRoutes);
+app.use('/api/session', sessionRoutes);
+app.use('/api/activity-tracking', activityTrackingRoutes);
+import roleRoutes from './routes/role.routes';
+import settingsRoutes from './routes/settings.routes';
 
-// Error handling
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ message: 'Internal server error' });
-});
+// Start app routes definitions here...
+app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/roles', roleRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/monitoring', monitoringRoutes);
+app.use('/api/workflow', workflowRoutes);
+app.use('/api/custom-fields', customFieldRoutes);
+app.use('/api/data', dataRoutes);
+
+import { errorHandler } from './middleware/errorHandler.middleware';
+
+// Centralized error handling
+app.use(errorHandler);
 
 const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // Start background jobs
-startCleanupJob();
+initCronJobs();
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

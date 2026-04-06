@@ -2,7 +2,7 @@ import React from 'react';
 
 export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className = '', children, ...props }) => {
   return (
-    <div className={`bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden ${className}`} {...props}>
+    <div className={`glass-card rounded-2xl transition-all duration-200 ${className}`} {...props}>
       {children}
     </div>
   );
@@ -10,7 +10,7 @@ export const Card: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className
 
 export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className = '', children, ...props }) => {
   return (
-    <div className={`px-5 py-4 border-b border-gray-200 ${className}`} {...props}>
+    <div className={`px-5 py-4 border-b border-border/50 bg-surface/30 rounded-t-2xl ${className}`} {...props}>
       {children}
     </div>
   );
@@ -18,7 +18,7 @@ export const CardHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ cla
 
 export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({ className = '', children, ...props }) => {
   return (
-    <h3 className={`text-lg font-medium text-gray-900 ${className}`} {...props}>
+    <h3 className={`text-lg font-medium text-text-main ${className}`} {...props}>
       {children}
     </h3>
   );
@@ -26,7 +26,7 @@ export const CardTitle: React.FC<React.HTMLAttributes<HTMLHeadingElement>> = ({ 
 
 export const CardDescription: React.FC<React.HTMLAttributes<HTMLParagraphElement>> = ({ className = '', children, ...props }) => {
   return (
-    <p className={`text-sm text-gray-500 mt-1 ${className}`} {...props}>
+    <p className={`text-sm text-text-muted mt-1 ${className}`} {...props}>
       {children}
     </p>
   );
@@ -42,7 +42,7 @@ export const CardContent: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ cl
 
 export const CardFooter: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className = '', children, ...props }) => {
   return (
-    <div className={`px-5 py-4 border-t border-gray-200 bg-gray-50/50 ${className}`} {...props}>
+    <div className={`px-5 py-4 border-t border-border/50 bg-background/30 backdrop-blur-sm rounded-b-2xl ${className}`} {...props}>
       {children}
     </div>
   );

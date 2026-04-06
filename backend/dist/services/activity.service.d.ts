@@ -1,0 +1,2 @@
+export declare const logActivity: (userId: string, action: string, entityType: string, entityId: string, description?: string, ipAddress?: string) => Promise<void>;
+//# sourceMappingURL=activity.service.d.ts.map

@@ -5,7 +5,8 @@ export const logActivity = async (
   action: string,
   entityType: string,
   entityId: string,
-  description?: string
+  description?: string,
+  ipAddress?: string
 ) => {
   try {
     await prisma.activityLog.create({
@@ -15,6 +16,7 @@ export const logActivity = async (
         entityType,
         entityId,
         description,
+        ipAddress,
       },
     });
   } catch (error) {

@@ -1,0 +1,8 @@
+src/controllers/activityTracking.controller.ts(126,42): error TS2339: Property 'workSummary' does not exist on type 'PrismaClient<{ log: ("error" | "query" | "warn")[]; }, never, DefaultArgs>'.
+src/controllers/activityTracking.controller.ts(150,37): error TS2339: Property 'attendance' does not exist on type 'PrismaClient<{ log: ("error" | "query" | "warn")[]; }, never, DefaultArgs>'.
+src/controllers/activityTracking.controller.ts(234,36): error TS2339: Property 'workSummary' does not exist on type 'PrismaClient<{ log: ("error" | "query" | "warn")[]; }, never, DefaultArgs>'.
+src/controllers/activityTracking.controller.ts(253,42): error TS2339: Property 'attendance' does not exist on type 'PrismaClient<{ log: ("error" | "query" | "warn")[]; }, never, DefaultArgs>'.
+src/controllers/activityTracking.controller.ts(267,58): error TS7006: Parameter 'stat' implicitly has an 'any' type.
+src/controllers/activityTracking.controller.ts(335,36): error TS2339: Property 'workSummary' does not exist on type 'PrismaClient<{ log: ("error" | "query" | "warn")[]; }, never, DefaultArgs>'.
+src/controllers/activityTracking.controller.ts(416,36): error TS2339: Property 'workSummary' does not exist on type 'PrismaClient<{ log: ("error" | "query" | "warn")[]; }, never, DefaultArgs>'.
+src/controllers/activityTracking.controller.ts(430,23): error TS7006: Parameter 's' implicitly has an 'any' type.

@@ -9,16 +9,25 @@ export const getActivities = async (req: AuthRequest, res: Response): Promise<vo
     const limit = parseInt(req.query.limit as string) || 50;
     const skip = (page - 1) * limit;
 
+    const userScope = req.user;
+    if (!userScope || !userScope.companyId) {
+      res.status(400).json({ error: 'No company attached to admin context' });
+      return;
+    }
+
+    const { companyId } = userScope;
+
     const [activities, total] = await Promise.all([
       prisma.activityLog.findMany({
+        where: { user: { companyId } },
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: { select: { id: true, name: true, avatarColor: true } },
+          user: { select: { id: true, name: true, avatarColor: true, email: true } },
         },
       }),
-      prisma.activityLog.count(),
+      prisma.activityLog.count({ where: { user: { companyId } } }),
     ]);
 
     res.json({

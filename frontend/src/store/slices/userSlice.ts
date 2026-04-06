@@ -14,12 +14,21 @@ const initialState: UserState = {
   error: null,
 };
 
-export const fetchUsers = createAsyncThunk('users/fetchAll', async (_, { rejectWithValue }) => {
+export const fetchUsers = createAsyncThunk('users/fetchAll', async (params: { role?: string; status?: string; search?: string } | void, { rejectWithValue }) => {
   try {
-    const { data } = await api.get('/users');
+    const { data } = await api.get('/users', { params: params || {} });
     return data.users;
   } catch (err: any) {
     return rejectWithValue(err.response?.data?.message || 'Failed to loaded users');
+  }
+});
+
+export const fetchActiveUsers = createAsyncThunk('users/fetchActive', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/users/active');
+    return data.users;
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.message || 'Failed to fetch active users');
   }
 });
 
@@ -41,7 +50,7 @@ export const updateUser = createAsyncThunk('users/update', async ({ id, data }: 
   }
 });
 
-export const updateUserRole = createAsyncThunk('users/updateRole', async ({ id, role }: { id: string; role: 'admin' | 'user' }, { rejectWithValue }) => {
+export const updateUserRole = createAsyncThunk('users/updateRole', async ({ id, role }: { id: string; role: 'manager' | 'employee' }, { rejectWithValue }) => {
   try {
     const { data } = await api.patch(`/users/${id}/role`, { role });
     return data.user;
@@ -56,6 +65,15 @@ export const updateUserStatus = createAsyncThunk('users/updateStatus', async ({ 
     return data.user;
   } catch (err: any) {
     return rejectWithValue(err.response?.data?.message || 'Failed to update status');
+  }
+});
+
+export const deleteUser = createAsyncThunk('users/delete', async (id: string, { rejectWithValue }) => {
+  try {
+    await api.delete(`/users/${id}`);
+    return id;
+  } catch (err: any) {
+    return rejectWithValue(err.response?.data?.message || 'Failed to delete user');
   }
 });
 
@@ -78,6 +96,20 @@ const userSlice = createSlice({
       state.users = action.payload;
     });
     builder.addCase(fetchUsers.rejected, (state, action) => {
+      state.isLoading = false;
+      state.error = action.payload as string;
+    });
+
+    // fetchActiveUsers
+    builder.addCase(fetchActiveUsers.pending, (state) => {
+      state.isLoading = true;
+      state.error = null;
+    });
+    builder.addCase(fetchActiveUsers.fulfilled, (state, action) => {
+      state.isLoading = false;
+      state.users = action.payload;
+    });
+    builder.addCase(fetchActiveUsers.rejected, (state, action) => {
       state.isLoading = false;
       state.error = action.payload as string;
     });
@@ -107,6 +139,11 @@ const userSlice = createSlice({
     };
     builder.addCase(updateUserRole.fulfilled, mapUpdatedUser);
     builder.addCase(updateUserStatus.fulfilled, mapUpdatedUser);
+
+    // deleteUser
+    builder.addCase(deleteUser.fulfilled, (state, action) => {
+      state.users = state.users.filter((u) => u.id !== action.payload);
+    });
   },
 });
 

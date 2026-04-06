@@ -1,0 +1,5 @@
+﻿src/components/ProtectedRoute.tsx(26,59): error TS1117: An object literal cannot have multiple properties with the same name.
+src/pages/dashboard/UserDashboard.tsx(1,28): error TS6133: 'useState' is declared but its value is never read.
+src/pages/dashboard/UserDashboard.tsx(17,1): error TS6133: 'Button' is declared but its value is never read.
+src/pages/dashboard/UserDashboard.tsx(18,1): error TS6133: 'toast' is declared but its value is never read.
+src/pages/hr/HRDashboard.tsx(79,113): error TS2367: This comparison appears to be unintentional because the types '"employee"' and '"manager"' have no overlap.

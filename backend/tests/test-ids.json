@@ -1,0 +1,169 @@
+{
+  "companies": {
+    "T-001": "80f92daa-2719-4762-9af5-5869ebeb03c4",
+    "T-002": "3c277a85-c7a1-4c14-8c1a-4767ca19288d",
+    "T-003": "a0679905-1bc2-44f4-95b2-d1bae804f65c"
+  },
+  "users": {
+    "admin_a": {
+      "id": "dcda3496-005b-4c8f-b817-726e5ff64243",
+      "email": "admin@acme-test.com",
+      "role": "admin",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "manager_a": {
+      "id": "8eda01e3-5d32-48f0-a5ca-72b87c11d239",
+      "email": "manager@acme-test.com",
+      "role": "manager",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "employee_a1": {
+      "id": "e336bbd0-5a50-4d89-b031-051147018c50",
+      "email": "emp1@acme-test.com",
+      "role": "employee",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "employee_a2": {
+      "id": "9c5eec04-f637-4d91-ad44-687bab7f6df8",
+      "email": "emp2@acme-test.com",
+      "role": "employee",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "employee_a3": {
+      "id": "51d600b5-fafc-4d46-a4c8-a2f877ae109c",
+      "email": "emp3@acme-test.com",
+      "role": "employee",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "hr_a": {
+      "id": "ab120d51-602c-4f5c-9f86-4b95f40a48c9",
+      "email": "hr@acme-test.com",
+      "role": "hr",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "admin_b": {
+      "id": "9ec8dbdb-6755-46a9-b546-d7d150cab534",
+      "email": "admin@beta-test.com",
+      "role": "admin",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "employee_b1": {
+      "id": "43934cec-0e89-40c4-955a-b34a74d3e75a",
+      "email": "emp1@beta-test.com",
+      "role": "employee",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "employee_b2": {
+      "id": "077865d1-430a-4d79-92e7-da479cd4d139",
+      "email": "emp2@beta-test.com",
+      "role": "employee",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "admin_c": {
+      "id": "a5ac0d84-a39d-4d21-b981-9a0af7b89995",
+      "email": "admin@gamma-test.com",
+      "role": "admin",
+      "companyId": "a0679905-1bc2-44f4-95b2-d1bae804f65c"
+    }
+  },
+  "projects": {
+    "project_a1": {
+      "id": "fc9b9660-d282-4aff-9684-9a534fe7a6d7",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "project_a2": {
+      "id": "0d9792ec-1231-4800-b65d-f01bcac24d9b",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "project_a3": {
+      "id": "e8310aaa-7274-45d9-b352-8e0e52848dd6",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "project_b1": {
+      "id": "be6a5f0b-73be-432f-af03-3a4fa5907334",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "project_b2": {
+      "id": "5eda9d44-f309-4984-aa21-4a56e51800c5",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "project_b3": {
+      "id": "d615b3d1-d56c-4467-85a4-ea67fac3650b",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    }
+  },
+  "tasks": {
+    "task_a1": {
+      "id": "90310b13-2e4a-4abc-9afa-802b95b3a8aa",
+      "projectId": "fc9b9660-d282-4aff-9684-9a534fe7a6d7",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "task_a2": {
+      "id": "285de2ff-48ee-40ca-83a1-92bd606f55cd",
+      "projectId": "fc9b9660-d282-4aff-9684-9a534fe7a6d7",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "task_a3": {
+      "id": "e489c662-6812-46fd-8ea6-ce4c08014473",
+      "projectId": "0d9792ec-1231-4800-b65d-f01bcac24d9b",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "task_a4": {
+      "id": "29bd2b50-5ae4-4ecd-98a9-6f7ebfbd8422",
+      "projectId": "0d9792ec-1231-4800-b65d-f01bcac24d9b",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "task_a5": {
+      "id": "c1c7e48d-fa94-4a6f-b252-42896b501b50",
+      "projectId": "e8310aaa-7274-45d9-b352-8e0e52848dd6",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "task_b1": {
+      "id": "0b3d7bcc-ff21-483e-9c07-8c30b127505f",
+      "projectId": "be6a5f0b-73be-432f-af03-3a4fa5907334",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "task_b2": {
+      "id": "e464a503-c690-4438-8856-b335ddd58930",
+      "projectId": "be6a5f0b-73be-432f-af03-3a4fa5907334",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "task_b3": {
+      "id": "3d77f3d0-6627-46e0-998b-12d20c8dba2b",
+      "projectId": "5eda9d44-f309-4984-aa21-4a56e51800c5",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "task_b4": {
+      "id": "9558ab19-443f-4cc9-8efd-ca286cdcec79",
+      "projectId": "d615b3d1-d56c-4467-85a4-ea67fac3650b",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "task_b5": {
+      "id": "d7937f83-d283-43dc-8774-7ca66d2188c7",
+      "projectId": "d615b3d1-d56c-4467-85a4-ea67fac3650b",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    }
+  },
+  "departments": {
+    "engineering_a": {
+      "id": "49fd8ec1-76a2-4e53-8ec5-c1da7fa44f07",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "marketing_a": {
+      "id": "ec82a0c4-bb28-454a-9a5a-e31a55f9e532",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "sales_a": {
+      "id": "030df81f-6ba3-4902-8d8d-2ad05e188108",
+      "companyId": "80f92daa-2719-4762-9af5-5869ebeb03c4"
+    },
+    "engineering_b": {
+      "id": "a2e37141-cb44-4233-a347-26ab35ebcfd2",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    },
+    "hr_b": {
+      "id": "f2833a7b-e3f1-4936-aede-beb926d9ac39",
+      "companyId": "3c277a85-c7a1-4c14-8c1a-4767ca19288d"
+    }
+  }
+}

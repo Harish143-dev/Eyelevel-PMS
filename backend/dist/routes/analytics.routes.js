@@ -1,0 +1,22 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const analytics_controller_1 = require("../controllers/analytics.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const role_middleware_1 = require("../middleware/role.middleware");
+const feature_middleware_1 = require("../middleware/feature.middleware");
+const permission_middleware_1 = require("../middleware/permission.middleware");
+const permissions_1 = require("../config/permissions");
+const router = (0, express_1.Router)();
+router.use(auth_middleware_1.verifyJWT);
+router.use((0, feature_middleware_1.checkFeature)('analytics'));
+router.get('/workload', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getGlobalWorkload);
+router.get('/projects/:projectId/workload', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getProjectWorkload);
+router.get('/projects/:projectId/burndown', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getProjectBurndown);
+router.get('/productivity-heatmap', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getProductivityHeatmap);
+router.get('/system-stats', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getSystemStats);
+router.get('/team-comparison', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getTeamComparison);
+router.get('/project-cost', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getProjectCost);
+router.get('/report-export', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getReportExport);
+exports.default = router;
+//# sourceMappingURL=analytics.routes.js.map

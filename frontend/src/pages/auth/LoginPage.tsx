@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 // react-hook-form
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../hooks/useRedux';
 import { login, clearError } from '../../store/slices/authSlice';
+import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
+import { fetchBranding, applyBranding } from '../../utils/tenantUtils';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -16,8 +19,34 @@ type LoginForm = z.infer<typeof loginSchema>;
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const dispatch = useAppDispatch();
   const { isLoading, error } = useAppSelector((state) => state.auth);
+
+  const [displayLogo, setDisplayLogo] = useState<string>('/eyelevel_logo.png');
+  const [tenantName, setTenantName] = useState<string>('PM App');
+
+  useEffect(() => {
+    const handleBranding = async () => {
+      const branding = await fetchBranding();
+      if (branding) {
+        if (branding.logoUrl) {
+          setDisplayLogo(branding.logoUrl);
+        }
+        setTenantName(branding.name);
+        applyBranding(branding);
+      } else {
+        const cachedLogo = localStorage.getItem('companyLogo');
+        if (cachedLogo) {
+          setDisplayLogo(cachedLogo);
+        }
+      }
+    };
+
+    handleBranding();
+  }, []);
+
+  const from = (location.state as any)?.from?.pathname || '/';
 
   const {
     register,
@@ -31,72 +60,114 @@ const LoginPage: React.FC = () => {
     dispatch(clearError());
     const resultAction = await dispatch(login(data));
     if (login.fulfilled.match(resultAction)) {
-      navigate('/');
+      navigate(from, { replace: true });
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
-            Sign in to PM App
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Or{' '}
-            <Link to="/auth/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-              create a new account
-            </Link>
+    <div className="min-h-screen lg:h-screen w-full flex flex-col lg:flex-row overflow-hidden bg-background">
+      {/* Left Side: Brand Hub (Visual Side - Compact) */}
+      <div className="hidden lg:flex lg:w-5/12 relative mesh-gradient items-center justify-center p-8 overflow-hidden border-r border-border/10">
+        <div className="absolute inset-0 bg-dot-pattern opacity-10" />
+        <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] bg-white/5 rounded-full blur-[100px] animate-float-orb" />
+        
+        <div className="relative z-10 w-full max-w-md animate-fade-in-up text-center">
+          <div className="inline-block p-4 rounded-2xl bg-white/5 border border-white/10 shadow-xl backdrop-blur-xl mb-6 hover-lift">
+            <img 
+              src={displayLogo} 
+              alt="Logo" 
+              className="h-14 w-auto object-contain filter drop-shadow-md"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/eyelevel_logo.png';
+              }}
+            />
+          </div>
+          <h1 className="text-4xl font-black text-white leading-tight mb-4 tracking-tight">
+            Elevate with <br />
+            <span className="text-white/80">{tenantName}</span>
+          </h1>
+          <p className="text-base text-white/70 font-medium leading-relaxed max-w-xs mx-auto">
+            Experience premium team collaboration and management tools tailored for your success.
           </p>
         </div>
+      </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-            {error}
+      {/* Right Side: Authentication Area (Compact) */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-10 lg:p-16 bg-background relative overflow-y-auto custom-scrollbar">
+        <div className="w-full max-w-sm animate-fade-in-up py-4">
+          {/* Header Area */}
+          <div className="mb-8 text-center lg:text-left">
+            <h2 className="text-3xl font-extrabold text-text-main tracking-tight mb-2">
+              Sign In
+            </h2>
+            <p className="text-sm text-text-muted font-medium">
+              Continue to your workspace.
+            </p>
           </div>
-        )}
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
+          {error && (
+            <div className="bg-red-50 text-red-500 p-3 rounded-xl text-xs font-bold border border-red-100 flex items-center mb-6 animate-in fade-in duration-300">
+              <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {error}
+            </div>
+          )}
+
+          <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
+            <div className="space-y-4">
+              <Input
+                label="Corporate Email"
                 type="email"
+                placeholder="name@company.com"
                 {...register('email')}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-lg placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="you@email.com"
+                error={errors.email?.message}
+                className="rounded-xl border-border/60 focus:ring-primary/20 py-3 bg-surface text-sm"
               />
-              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+
+              <div className="space-y-1">
+                <Input
+                  label="Password"
+                  type="password"
+                  placeholder="••••••••"
+                  {...register('password')}
+                  error={errors.password?.message}
+                  className="rounded-xl border-border/60 focus:ring-primary/20 py-3 bg-surface text-sm"
+                />
+                <div className="flex justify-end pr-1">
+                  <Link 
+                    to="/auth/forgot-password" 
+                    className="text-[10px] font-bold text-primary hover:text-primary-hover transition-colors"
+                  >
+                    Forgot Password?
+                  </Link>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                {...register('password')}
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 rounded-lg placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="••••••••"
-              />
-              {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
-            </div>
+            <Button
+              type="submit"
+              isLoading={isLoading}
+              size="md"
+              className="w-full rounded-xl py-3.5 font-bold text-sm shadow-lg shadow-primary/5 hover-glow transition-all active:scale-[0.98] mt-2"
+            >
+              Sign In
+            </Button>
+          </form>
+
+          {/* Footer Actions */}
+          <div className="mt-8 pt-8 border-t border-border/40 flex flex-col sm:flex-row items-center justify-between space-y-4 sm:space-y-0">
+            <p className="text-xs text-text-muted font-medium">
+              Need a workspace?
+            </p>
+            <Link 
+              to="/auth/register" 
+              className="px-5 py-2 border border-border/80 rounded-lg text-xs font-bold text-text-main hover:bg-surface transition-all hover-lift active:scale-[0.98]"
+            >
+              Register Now
+            </Link>
           </div>
-
-          <div className="flex items-center justify-end">
-            <div className="text-sm">
-              <Link to="/auth/forgot-password" className="font-medium text-indigo-600 hover:text-indigo-500">
-                Forgot your password?
-              </Link>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-70 disabled:cursor-not-allowed transition-colors"
-          >
-            {isLoading ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   );

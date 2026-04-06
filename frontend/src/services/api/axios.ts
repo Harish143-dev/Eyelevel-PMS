@@ -14,7 +14,6 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Response interceptor to handle token refresh
 let isRefreshing = false;
 let failedQueue: { resolve: (value: unknown) => void; reject: (reason?: unknown) => void }[] = [];
 
@@ -44,14 +43,18 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       !originalRequest._retry &&
       !originalRequest.url?.includes('/auth/login') &&
-      !originalRequest.url?.includes('/auth/refresh')
+      !originalRequest.url?.includes('/auth/refresh') &&
+      !originalRequest.url?.includes('/tenant/resolve')
     ) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         }).then((token) => {
+          originalRequest._retry = true;
           originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
+          return axios(originalRequest);
+        }).catch((err) => {
+          return Promise.reject(err);
         });
       }
 
@@ -68,7 +71,8 @@ api.interceptors.response.use(
         
         // Update the original request header and retry
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        return api(originalRequest);
+        // Use regular axios instance to bypass interceptors on the retry
+        return axios(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
         localStorage.removeItem('accessToken');

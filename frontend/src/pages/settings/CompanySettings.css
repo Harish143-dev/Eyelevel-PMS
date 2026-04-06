@@ -1,0 +1,18 @@
+.company-settings-page .fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.company-settings-page .border-primary {
+  border-color: var(--theme-primary, var(--primary-color, #4f46e5));
+}
+.company-settings-page .text-primary {
+  color: var(--theme-primary, var(--primary-color, #4f46e5));
+}
+.company-settings-page .focus\:ring-primary:focus {
+  --tw-ring-color: var(--theme-primary, var(--primary-color, #4f46e5));
+}

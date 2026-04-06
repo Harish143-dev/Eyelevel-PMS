@@ -1,0 +1,25 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const user_controller_1 = require("../controllers/user.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const role_middleware_1 = require("../middleware/role.middleware");
+const validate_middleware_1 = require("../middleware/validate.middleware");
+const user_validator_1 = require("../validators/user.validator");
+const permission_middleware_1 = require("../middleware/permission.middleware");
+const permissions_1 = require("../config/permissions");
+const roles_1 = require("../config/roles");
+const rateLimit_middleware_1 = require("../middleware/rateLimit.middleware");
+const router = (0, express_1.Router)();
+router.use(auth_middleware_1.verifyJWT);
+router.get('/', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_VIEW), user_controller_1.getUsers);
+router.get('/active', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_VIEW), user_controller_1.getActiveUsers);
+router.get('/:id', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_VIEW), user_controller_1.getUserById);
+router.post('/', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_CREATE), (0, validate_middleware_1.validate)(user_validator_1.createUserSchema), user_controller_1.createUser);
+router.put('/:id', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_EDIT), (0, validate_middleware_1.validate)(user_validator_1.updateUserSchema), user_controller_1.updateUser);
+router.patch('/:id/password', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_EDIT), user_controller_1.updatePassword);
+router.patch('/:id/role', role_middleware_1.requireAdmin, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_MANAGE_ROLES), (0, validate_middleware_1.validate)(user_validator_1.updateRoleSchema), user_controller_1.updateUserRole);
+router.patch('/:id/status', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_APPROVE), (0, validate_middleware_1.validate)(user_validator_1.updateStatusSchema), user_controller_1.updateUserStatus);
+router.delete('/:id', rateLimit_middleware_1.sensitiveLimiter, (0, role_middleware_1.requireRole)(roles_1.Role.ADMIN), (0, permission_middleware_1.checkPermission)(permissions_1.Permission.USER_DELETE), user_controller_1.deleteUser);
+exports.default = router;
+//# sourceMappingURL=user.routes.js.map

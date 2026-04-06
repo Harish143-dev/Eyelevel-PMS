@@ -1,0 +1,313 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.completeOnboarding = exports.onboardingStep4 = exports.onboardingStep3 = exports.onboardingStep2 = exports.onboardingStep1 = exports.getOnboardingStatus = void 0;
+const db_1 = __importDefault(require("../config/db"));
+const permissions_1 = require("../config/permissions");
+const activity_service_1 = require("../services/activity.service");
+/**
+ * GET /api/onboarding/status
+ * Returns the current onboarding state for the user's company.
+ */
+const getOnboardingStatus = async (req, res) => {
+    try {
+        const user = await db_1.default.user.findUnique({
+            where: { id: req.user.id },
+            select: { companyId: true },
+        });
+        if (!user?.companyId) {
+            // User has no company — they need to start onboarding from step 1
+            res.json({ setupCompleted: false, setupStep: 0, hasCompany: false });
+            return;
+        }
+        const company = await db_1.default.company.findUnique({
+            where: { id: user.companyId },
+            select: {
+                id: true,
+                name: true,
+                setupCompleted: true,
+                setupStep: true,
+                features: true,
+                settings: true,
+            },
+        });
+        if (!company) {
+            res.json({ setupCompleted: false, setupStep: 0, hasCompany: false });
+            return;
+        }
+        res.json({
+            hasCompany: true,
+            setupCompleted: company.setupCompleted,
+            setupStep: company.setupStep,
+            company: {
+                id: company.id,
+                name: company.name,
+                features: company.features,
+                settings: company.settings,
+            },
+        });
+    }
+    catch (error) {
+        console.error('Get onboarding status error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.getOnboardingStatus = getOnboardingStatus;
+/**
+ * POST /api/onboarding/step-1 — Company Profile
+ * Creates the company and links the current user to it.
+ * Body: { name, businessType, address }
+ */
+const onboardingStep1 = async (req, res) => {
+    try {
+        const { name, businessType, address } = req.body;
+        if (!name || name.trim().length < 2) {
+            res.status(400).json({ message: 'Company name is required (min 2 characters)' });
+            return;
+        }
+        const userId = req.user.id;
+        // Check if user already has a company
+        const existingUser = await db_1.default.user.findUnique({
+            where: { id: userId },
+            select: { companyId: true },
+        });
+        let companyId = existingUser?.companyId;
+        if (companyId) {
+            // Update existing company
+            await db_1.default.company.update({
+                where: { id: companyId },
+                data: {
+                    name: name.trim(),
+                    setupStep: 2,
+                    features: permissions_1.DefaultFeatures,
+                },
+            });
+            // Upsert settings
+            await db_1.default.companySettings.upsert({
+                where: { companyId },
+                create: {
+                    companyId,
+                    businessType: businessType || null,
+                    address: address || null,
+                },
+                update: {
+                    businessType: businessType || null,
+                    address: address || null,
+                },
+            });
+        }
+        else {
+            // Create new company
+            const company = await db_1.default.company.create({
+                data: {
+                    name: name.trim(),
+                    features: permissions_1.DefaultFeatures,
+                    setupStep: 2,
+                    settings: {
+                        create: {
+                            businessType: businessType || null,
+                            address: address || null,
+                        },
+                    },
+                },
+            });
+            companyId = company.id;
+            // Link user to company
+            await db_1.default.user.update({
+                where: { id: userId },
+                data: { companyId },
+            });
+            // Create default system roles for this company
+            const roleNames = ['Admin', 'Manager', 'HR', 'Employee'];
+            for (const roleName of roleNames) {
+                const key = roleName.toLowerCase();
+                await db_1.default.role.create({
+                    data: {
+                        companyId,
+                        name: roleName,
+                        permissions: permissions_1.DefaultRolePermissions[key] || [],
+                        isSystemRole: true,
+                    },
+                });
+            }
+            // Seed Default Task Statuses
+            const defaultStatuses = [
+                { name: 'Backlog', color: '#6B7280', orderIndex: 1, isDefault: true },
+                { name: 'To Do', color: '#3B82F6', orderIndex: 2, isDefault: true },
+                { name: 'In Progress', color: '#F59E0B', orderIndex: 3, isDefault: true },
+                { name: 'QA', color: '#8B5CF6', orderIndex: 4, isDefault: true },
+                { name: 'Done', color: '#10B981', orderIndex: 5, isDefault: true }
+            ];
+            await db_1.default.customTaskStatus.createMany({
+                data: defaultStatuses.map(s => ({ ...s, companyId: companyId }))
+            });
+            // Seed Default Task Priorities
+            const defaultPriorities = [
+                { name: 'Low', color: '#9CA3AF', icon: 'chevron-down', orderIndex: 1 },
+                { name: 'Medium', color: '#3B82F6', icon: 'minus', orderIndex: 2 },
+                { name: 'High', color: '#F59E0B', icon: 'chevron-up', orderIndex: 3 },
+                { name: 'Urgent', color: '#EF4444', icon: 'alert-circle', orderIndex: 4 }
+            ];
+            await db_1.default.customTaskPriority.createMany({
+                data: defaultPriorities.map(p => ({ ...p, companyId: companyId }))
+            });
+            // Assign admin role to the company creator
+            const adminRole = await db_1.default.role.findFirst({
+                where: { companyId, name: 'Admin', isSystemRole: true },
+            });
+            if (adminRole) {
+                await db_1.default.user.update({
+                    where: { id: userId },
+                    data: { roleId: adminRole.id },
+                });
+            }
+        }
+        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_STEP_1', 'company', companyId, `Created company "${name}"`);
+        res.json({ message: 'Step 1 completed', setupStep: 2, companyId });
+    }
+    catch (error) {
+        console.error('Onboarding step 1 error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.onboardingStep1 = onboardingStep1;
+/**
+ * POST /api/onboarding/step-2 — Localization
+ * Body: { country, timezone, currency, dateFormat }
+ */
+const onboardingStep2 = async (req, res) => {
+    try {
+        const { country, timezone, currency, dateFormat } = req.body;
+        const userId = req.user.id;
+        const user = await db_1.default.user.findUnique({
+            where: { id: userId },
+            select: { companyId: true },
+        });
+        if (!user?.companyId) {
+            res.status(400).json({ message: 'Complete step 1 first' });
+            return;
+        }
+        await db_1.default.companySettings.update({
+            where: { companyId: user.companyId },
+            data: {
+                country: country || null,
+                timezone: timezone || 'UTC',
+                currency: currency || 'USD',
+                dateFormat: dateFormat || 'YYYY-MM-DD',
+            },
+        });
+        await db_1.default.company.update({
+            where: { id: user.companyId },
+            data: { setupStep: 3 },
+        });
+        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_STEP_2', 'company', user.companyId, 'Configured localization');
+        res.json({ message: 'Step 2 completed', setupStep: 3 });
+    }
+    catch (error) {
+        console.error('Onboarding step 2 error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.onboardingStep2 = onboardingStep2;
+/**
+ * POST /api/onboarding/step-3 — Work Schedule
+ * Body: { workDays, workHoursStart, workHoursEnd }
+ */
+const onboardingStep3 = async (req, res) => {
+    try {
+        const { workDays, workHoursStart, workHoursEnd } = req.body;
+        const userId = req.user.id;
+        const user = await db_1.default.user.findUnique({
+            where: { id: userId },
+            select: { companyId: true },
+        });
+        if (!user?.companyId) {
+            res.status(400).json({ message: 'Complete step 1 first' });
+            return;
+        }
+        await db_1.default.companySettings.update({
+            where: { companyId: user.companyId },
+            data: {
+                workDays: workDays || [1, 2, 3, 4, 5],
+                workHoursStart: workHoursStart || '09:00',
+                workHoursEnd: workHoursEnd || '17:00',
+            },
+        });
+        await db_1.default.company.update({
+            where: { id: user.companyId },
+            data: { setupStep: 4 },
+        });
+        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_STEP_3', 'company', user.companyId, 'Configured work schedule');
+        res.json({ message: 'Step 3 completed', setupStep: 4 });
+    }
+    catch (error) {
+        console.error('Onboarding step 3 error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.onboardingStep3 = onboardingStep3;
+/**
+ * POST /api/onboarding/step-4 — Invite Team (optional)
+ * Body: { emails: string[] }
+ *
+ * For now this just stores the invitations. Actual email invitations
+ * can be implemented later as an enhancement.
+ */
+const onboardingStep4 = async (req, res) => {
+    try {
+        const { emails } = req.body;
+        const userId = req.user.id;
+        const user = await db_1.default.user.findUnique({
+            where: { id: userId },
+            select: { companyId: true },
+        });
+        if (!user?.companyId) {
+            res.status(400).json({ message: 'Complete step 1 first' });
+            return;
+        }
+        // For now, we log the invited emails. In the future, this sends invitation emails.
+        const invitedCount = Array.isArray(emails) ? emails.length : 0;
+        await db_1.default.company.update({
+            where: { id: user.companyId },
+            data: { setupStep: 5 },
+        });
+        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_STEP_4', 'company', user.companyId, `Invited ${invitedCount} team members`);
+        res.json({ message: 'Step 4 completed', setupStep: 5, invitedCount });
+    }
+    catch (error) {
+        console.error('Onboarding step 4 error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.onboardingStep4 = onboardingStep4;
+/**
+ * POST /api/onboarding/complete
+ * Marks the company setup as completed.
+ */
+const completeOnboarding = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const user = await db_1.default.user.findUnique({
+            where: { id: userId },
+            select: { companyId: true },
+        });
+        if (!user?.companyId) {
+            res.status(400).json({ message: 'No company found' });
+            return;
+        }
+        await db_1.default.company.update({
+            where: { id: user.companyId },
+            data: { setupCompleted: true },
+        });
+        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_COMPLETED', 'company', user.companyId, 'Completed company onboarding');
+        res.json({ message: 'Onboarding completed successfully', setupCompleted: true });
+    }
+    catch (error) {
+        console.error('Complete onboarding error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+exports.completeOnboarding = completeOnboarding;
+//# sourceMappingURL=onboarding.controller.js.map

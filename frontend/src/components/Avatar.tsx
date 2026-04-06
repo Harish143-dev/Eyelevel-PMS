@@ -4,9 +4,11 @@ interface AvatarProps {
   name: string;
   color: string;
   size?: number;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
-const Avatar: React.FC<AvatarProps> = ({ name, color, size = 36 }) => {
+const Avatar: React.FC<AvatarProps> = ({ name, color, size = 36, className, style }) => {
   const initials = name
     .split(' ')
     .map((n) => n[0])
@@ -16,6 +18,7 @@ const Avatar: React.FC<AvatarProps> = ({ name, color, size = 36 }) => {
 
   return (
     <div
+      className={className}
       style={{
         width: size,
         height: size,
@@ -28,6 +31,7 @@ const Avatar: React.FC<AvatarProps> = ({ name, color, size = 36 }) => {
         fontWeight: 600,
         fontSize: size * 0.38,
         flexShrink: 0,
+        ...style
       }}
     >
       {initials}

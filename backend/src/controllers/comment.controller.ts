@@ -2,6 +2,7 @@ import { Response } from 'express';
 import prisma from '../config/db';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { getIO } from '../config/socket';
+import { notifyCommentAdded, notifyUserMentioned } from '../services/notification.service';
 
 // GET /api/tasks/:id/comments
 export const getComments = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -24,7 +25,7 @@ export const getComments = async (req: AuthRequest, res: Response): Promise<void
 // POST /api/tasks/:id/comments
 export const createComment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { content } = req.body;
+    const { content, mentions } = req.body;
     const taskId = req.params.id as string;
 
     if (!content || !content.trim()) {
@@ -32,7 +33,10 @@ export const createComment = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true } });
+    const task = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { projectId: true, title: true, createdBy: true, assignedTo: true },
+    });
     if (!task) {
       res.status(404).json({ message: 'Task not found' });
       return;
@@ -48,6 +52,25 @@ export const createComment = async (req: AuthRequest, res: Response): Promise<vo
         user: { select: { id: true, name: true, avatarColor: true } },
       },
     });
+
+    const mentionedUserIds: string[] = Array.isArray(mentions) ? mentions : [];
+    
+    // Notify mentioned users
+    for (const userId of mentionedUserIds) {
+      if (userId !== req.user!.id) {
+        await notifyUserMentioned(userId, task.title, taskId, task.projectId, req.user!.name);
+      }
+    }
+
+    // Notify task creator (if not the commenter and not mentioned)
+    if (task.createdBy !== req.user!.id && !mentionedUserIds.includes(task.createdBy)) {
+      await notifyCommentAdded(task.createdBy, task.title, taskId, task.projectId, req.user!.name);
+    }
+
+    // Notify task assignee (if not the commenter, different from creator, and not mentioned)
+    if (task.assignedTo && task.assignedTo !== req.user!.id && task.assignedTo !== task.createdBy && !mentionedUserIds.includes(task.assignedTo)) {
+      await notifyCommentAdded(task.assignedTo, task.title, taskId, task.projectId, req.user!.name);
+    }
 
     // Emit socket event
     getIO().to(`project:${task.projectId}`).emit('comment:created', { taskId, comment });
@@ -111,8 +134,8 @@ export const deleteComment = async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
-    // Owner of the comment or admin can delete
-    if (existing.userId !== req.user!.id && req.user!.role !== 'admin') {
+    // Owner of the comment or admin/super_admin can delete
+    if (existing.userId !== req.user!.id && !['manager', 'admin'].includes(req.user!.role)) {
       res.status(403).json({ message: 'Not authorized to delete this comment' });
       return;
     }

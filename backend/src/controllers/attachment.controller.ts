@@ -96,7 +96,7 @@ export const deleteAttachment = async (req: AuthRequest, res: Response): Promise
     }
 
     // Only uploader or admin can delete
-    if (attachment.uploadedBy !== req.user!.id && req.user!.role !== 'admin') {
+    if (attachment.uploadedBy !== req.user!.id && req.user!.role !== 'manager') {
       res.status(403).json({ message: 'Not authorized to delete this file' });
       return;
     }
