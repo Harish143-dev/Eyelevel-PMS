@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api',
+  baseURL: import.meta.env.DEV ? '/api' : (import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'https://eyelevel-pms-backend.onrender.com/api'),
   withCredentials: true,
 });
 
@@ -63,12 +63,13 @@ api.interceptors.response.use(
 
       try {
         console.log('[API] Attempting token refresh...');
-        const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true });
+        const refreshURL = import.meta.env.DEV ? '/api/auth/refresh' : (import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api/auth/refresh` : 'https://eyelevel-pms-backend.onrender.com/api/auth/refresh');
+        const { data } = await axios.post(refreshURL, {}, { withCredentials: true });
         const newToken = data.accessToken;
-        
+
         localStorage.setItem('accessToken', newToken);
         processQueue(null, newToken);
-        
+
         // Update the original request header and retry
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
         // Use regular axios instance to bypass interceptors on the retry

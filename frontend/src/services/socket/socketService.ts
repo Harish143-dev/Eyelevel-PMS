@@ -14,9 +14,12 @@ class SocketService {
     if (!this.socket) {
       const token = localStorage.getItem('accessToken');
       
-      this.socket = io(import.meta.env.VITE_API_URL || window.location.origin, {
+      const socketURL = import.meta.env.DEV ? window.location.origin : (import.meta.env.VITE_API_URL || 'https://eyelevel-pms-backend.onrender.com');
+      const socketPath = import.meta.env.DEV ? '/api/socket.io' : '/socket.io';
+
+      this.socket = io(socketURL, {
         auth: { token },
-        path: import.meta.env.VITE_API_URL ? '/socket.io' : '/api/socket.io', // Adjust path based on proxy or direct connect
+        path: socketPath,
         transports: ['websocket'],
         reconnection: true,
       });
