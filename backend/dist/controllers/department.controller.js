@@ -9,7 +9,7 @@ const createDepartment = async (req, res) => {
     try {
         const { name, description, color, userIds, managerId } = req.body;
         const newDept = await db_1.default.department.create({
-            data: { name, description, color, managerId: managerId || null }
+            data: { name, description, color, managerId: managerId || null, companyId: req.user?.companyId || null }
         });
         const allUserIds = [...(userIds || [])];
         if (managerId && !allUserIds.includes(managerId)) {
@@ -38,6 +38,7 @@ exports.createDepartment = createDepartment;
 const getDepartments = async (req, res) => {
     try {
         const departments = await db_1.default.department.findMany({
+            where: req.user?.companyId ? { companyId: req.user.companyId } : {},
             include: {
                 manager: { select: { id: true, name: true, avatarColor: true } },
                 _count: { select: { users: true, projects: true } }

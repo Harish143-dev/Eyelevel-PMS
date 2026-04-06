@@ -75,7 +75,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ taskId, isOpen, onClo
 
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedDescription, setEditedDescription] = useState('');
-  const [isSavingDescription, setIsSavingDescription] = useState(false);
+  const [, setIsSavingDescription] = useState(false);
 
   const { statusOptions, priorityOptions } = useWorkflowStatuses();
 

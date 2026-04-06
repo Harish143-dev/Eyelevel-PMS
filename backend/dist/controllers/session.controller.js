@@ -10,29 +10,44 @@ const createSession = async (req, res) => {
     try {
         const userId = req.user.id;
         const { deviceId, tabId } = req.body;
+        console.log(`createSession: Initiating session for user ${userId}, device ${deviceId}, tab ${tabId}`);
         if (!deviceId || !tabId) {
+            console.warn('createSession: Missing deviceId or tabId');
             res.status(400).json({ message: 'deviceId and tabId are required' });
             return;
         }
-        // Get IP address
-        const ipAddress = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+        // Get IP address and ensure it fits in the DB column (max 45 chars)
+        let ipAddress = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+        if (ipAddress.length > 45) {
+            ipAddress = ipAddress.substring(0, 45);
+        }
         const now = new Date();
-        const session = await db_1.default.userSession.create({
-            data: {
-                userId,
-                deviceId,
-                tabId,
-                loginTime: now,
-                lastActiveAt: now,
-                isActive: true,
-                ipAddress,
-            },
-        });
-        res.status(201).json({ session });
+        try {
+            const session = await db_1.default.userSession.create({
+                data: {
+                    userId,
+                    deviceId,
+                    tabId,
+                    loginTime: now,
+                    lastActiveAt: now,
+                    isActive: true,
+                    ipAddress,
+                },
+            });
+            console.log(`createSession: Session ${session.id} created successfully for user ${userId}`);
+            res.status(201).json({ session });
+        }
+        catch (prismaError) {
+            console.error('createSession: Prisma creation error:', prismaError);
+            res.status(500).json({
+                message: 'Database error creating session',
+                error: process.env.NODE_ENV === 'development' ? prismaError.message : 'Internal error'
+            });
+        }
     }
     catch (error) {
-        console.error('Create session error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error('createSession: Global error:', error);
+        res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 };
 exports.createSession = createSession;

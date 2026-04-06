@@ -27,7 +27,7 @@ const canModifyTask = (userRole, userId, task, projectManagerCheck) => {
     return 'none';
 };
 // GET /api/projects/:id/tasks
-const getProjectTasks = async (req, res) => {
+const getProjectTasks = async (req, res, next) => {
     try {
         const id = req.params.id;
         const role = req.user.role;
@@ -46,6 +46,8 @@ const getProjectTasks = async (req, res) => {
             include: {
                 assignee: { select: { id: true, name: true, avatarColor: true, designation: true } },
                 creator: { select: { id: true, name: true, avatarColor: true, designation: true } },
+                customStatus: true,
+                customPriority: true,
                 _count: { select: { comments: true, attachments: true, subtasks: true } },
                 dependsOn: { select: { id: true, blockingTaskId: true } },
                 blockedBy: { select: { id: true, dependentTaskId: true } },
@@ -55,13 +57,12 @@ const getProjectTasks = async (req, res) => {
         res.json({ tasks });
     }
     catch (error) {
-        console.error('Get tasks error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getProjectTasks = getProjectTasks;
 // GET /api/tasks/my
-const getMyTasks = async (req, res) => {
+const getMyTasks = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const paginationParams = (0, pagination_1.parsePagination)(req.query);
@@ -72,6 +73,8 @@ const getMyTasks = async (req, res) => {
                     project: { select: { id: true, name: true } },
                     assignee: { select: { id: true, name: true, avatarColor: true, designation: true } },
                     creator: { select: { id: true, name: true, avatarColor: true, designation: true } },
+                    customStatus: true,
+                    customPriority: true,
                     _count: { select: { comments: true, attachments: true, subtasks: true } },
                 },
                 orderBy: { dueDate: 'asc' },
@@ -86,13 +89,12 @@ const getMyTasks = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Get my tasks error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getMyTasks = getMyTasks;
 // GET /api/tasks
-const getTasks = async (req, res) => {
+const getTasks = async (req, res, next) => {
     try {
         const { assignedTo, projectId, status, priority, isDeleted } = req.query;
         const paginationParams = (0, pagination_1.parsePagination)(req.query);
@@ -101,6 +103,8 @@ const getTasks = async (req, res) => {
             // If filtering by project or assignee, we might want to see subtasks too
             // But if it's a general list, we only want top-level
             parentTaskId: (projectId || assignedTo) ? undefined : null,
+            // TENANT ISOLATION: scope to user's company via project
+            ...(req.user.companyId ? { project: { companyId: req.user.companyId } } : {}),
         };
         if (assignedTo)
             where.assignedTo = assignedTo;
@@ -117,6 +121,8 @@ const getTasks = async (req, res) => {
                     project: { select: { id: true, name: true } },
                     assignee: { select: { id: true, name: true, avatarColor: true, designation: true } },
                     creator: { select: { id: true, name: true, avatarColor: true, designation: true } },
+                    customStatus: true,
+                    customPriority: true,
                     _count: { select: { comments: true, attachments: true, subtasks: true } },
                 },
                 orderBy: { updatedAt: 'desc' },
@@ -131,13 +137,12 @@ const getTasks = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Get tasks error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getTasks = getTasks;
 // GET /api/tasks/:id
-const getTaskById = async (req, res) => {
+const getTaskById = async (req, res, next) => {
     try {
         const id = req.params.id;
         console.log(`[TASKS] getTaskById called for ID: ${id} by User: ${req.user.id} (Role: ${req.user.role})`);
@@ -173,6 +178,12 @@ const getTaskById = async (req, res) => {
             res.status(404).json({ message: 'Task not found' });
             return;
         }
+        // TENANT ISOLATION: verify task's project belongs to user's company
+        const project = await db_1.default.project.findUnique({ where: { id: task.projectId }, select: { companyId: true } });
+        if (req.user.companyId && project?.companyId && project.companyId !== req.user.companyId) {
+            res.status(404).json({ message: 'Task not found' });
+            return;
+        }
         // Calculate permission level for the current user
         const isProjectManager = await db_1.default.projectMember.findFirst({
             where: { projectId: task.projectId, userId: req.user.id, isProjectManager: true },
@@ -182,13 +193,12 @@ const getTaskById = async (req, res) => {
         res.json({ task, permissionLevel });
     }
     catch (error) {
-        console.error('Get task error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getTaskById = getTaskById;
 // POST /api/projects/:id/tasks
-const createTask = async (req, res) => {
+const createTask = async (req, res, next) => {
     try {
         const projectId = req.params.id;
         const { title, description, assignedTo, status, dueDate, priority, customFields, recurringRule } = req.body;
@@ -300,18 +310,23 @@ const createTask = async (req, res) => {
         res.status(201).json({ task });
     }
     catch (error) {
-        console.error('Create task error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.createTask = createTask;
 // PUT /api/tasks/:id — full edit
-const updateTask = async (req, res) => {
+const updateTask = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { title, description, dueDate, priority, assignedTo, status, position, customFields, recurringRule, customStatusId, customPriorityId } = req.body;
         const existingTask = await db_1.default.task.findUnique({ where: { id } });
         if (!existingTask) {
+            res.status(404).json({ message: 'Task not found' });
+            return;
+        }
+        // TENANT ISOLATION: verify task's project belongs to user's company
+        const taskProject = await db_1.default.project.findUnique({ where: { id: existingTask.projectId }, select: { companyId: true } });
+        if (req.user.companyId && taskProject?.companyId && taskProject.companyId !== req.user.companyId) {
             res.status(404).json({ message: 'Task not found' });
             return;
         }
@@ -351,11 +366,13 @@ const updateTask = async (req, res) => {
         if (req.user.role === roles_1.Role.EMPLOYEE && !isProjectManager && assignedTo && assignedTo !== req.user.id) {
             finalAssignedTo = existingTask.assignedTo;
         }
-        // Validate status if provided
-        const validStatuses = ['pending', 'ongoing', 'in_review', 'completed', 'cancelled'];
-        if (status && !validStatuses.includes(status)) {
-            res.status(400).json({ message: 'Invalid status' });
-            return;
+        // Sync standard status with custom status category if custom status is provided
+        let finalStatus = status;
+        if (customStatusId) {
+            const customStatus = await db_1.default.customTaskStatus.findUnique({ where: { id: customStatusId } });
+            if (customStatus) {
+                finalStatus = customStatus.standardStatus;
+            }
         }
         const task = await db_1.default.task.update({
             where: { id },
@@ -365,7 +382,7 @@ const updateTask = async (req, res) => {
                 dueDate: dueDate ? new Date(dueDate) : undefined,
                 priority,
                 assignedTo: finalAssignedTo,
-                status,
+                status: finalStatus,
                 customStatusId: customStatusId !== undefined ? customStatusId : undefined,
                 customPriorityId: customPriorityId !== undefined ? customPriorityId : undefined,
                 position,
@@ -400,17 +417,22 @@ const updateTask = async (req, res) => {
         res.json({ task });
     }
     catch (error) {
-        console.error('Update task error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updateTask = updateTask;
 // DELETE /api/tasks/:id
-const deleteTask = async (req, res) => {
+const deleteTask = async (req, res, next) => {
     try {
         const id = req.params.id;
         const task = await db_1.default.task.findUnique({ where: { id } });
         if (!task) {
+            res.status(404).json({ message: 'Task not found' });
+            return;
+        }
+        // TENANT ISOLATION: verify task's project belongs to user's company
+        const delTaskProject = await db_1.default.project.findUnique({ where: { id: task.projectId }, select: { companyId: true } });
+        if (req.user.companyId && delTaskProject?.companyId && delTaskProject.companyId !== req.user.companyId) {
             res.status(404).json({ message: 'Task not found' });
             return;
         }
@@ -434,16 +456,18 @@ const deleteTask = async (req, res) => {
         res.json({ message: 'Task deleted' });
     }
     catch (error) {
-        console.error('Delete task error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.deleteTask = deleteTask;
 // GET /api/tasks/deleted — admin only
-const getDeletedTasks = async (req, res) => {
+const getDeletedTasks = async (req, res, next) => {
     try {
         const tasks = await db_1.default.task.findMany({
-            where: { isDeleted: true },
+            where: {
+                isDeleted: true,
+                ...(req.user?.companyId ? { project: { companyId: req.user.companyId } } : {})
+            },
             include: {
                 project: { select: { id: true, name: true } },
                 assignee: { select: { id: true, name: true, avatarColor: true } },
@@ -453,13 +477,12 @@ const getDeletedTasks = async (req, res) => {
         res.json({ tasks });
     }
     catch (error) {
-        console.error('Get deleted tasks error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getDeletedTasks = getDeletedTasks;
 // PATCH /api/tasks/:id/restore — admin only
-const restoreTask = async (req, res) => {
+const restoreTask = async (req, res, next) => {
     try {
         const id = req.params.id;
         const task = await db_1.default.task.findUnique({ where: { id } });
@@ -477,13 +500,12 @@ const restoreTask = async (req, res) => {
         res.json({ message: 'Task restored' });
     }
     catch (error) {
-        console.error('Restore task error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.restoreTask = restoreTask;
 // PATCH /api/tasks/:id/status — assignee or creator or admin can update
-const updateTaskStatus = async (req, res) => {
+const updateTaskStatus = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { status } = req.body;
@@ -542,13 +564,12 @@ const updateTaskStatus = async (req, res) => {
         res.json({ task });
     }
     catch (error) {
-        console.error('Update task status error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updateTaskStatus = updateTaskStatus;
 // PATCH /api/tasks/:id/assign — self-assign or admin/PM reassign
-const assignTask = async (req, res) => {
+const assignTask = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { assignedTo } = req.body;
@@ -586,16 +607,22 @@ const assignTask = async (req, res) => {
         res.json({ task });
     }
     catch (error) {
-        console.error('Assign task error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.assignTask = assignTask;
 // PATCH /api/tasks/:id/position — kanban drag position
-const updateTaskPosition = async (req, res) => {
+const updateTaskPosition = async (req, res, next) => {
     try {
         const id = req.params.id;
-        const { status, position, customStatusId } = req.body;
+        let { status, position, customStatusId } = req.body;
+        // Handle being passed a UUID for status (i.e. custom workflow status from Kanban)
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(status);
+        if (isUUID) {
+            customStatusId = status;
+            const customStatus = await db_1.default.customTaskStatus.findUnique({ where: { id: customStatusId } });
+            status = customStatus?.standardStatus || 'ongoing';
+        }
         const existingTask = await db_1.default.task.findUnique({ where: { id } });
         if (!existingTask) {
             res.status(404).json({ message: 'Task not found' });
@@ -629,14 +656,13 @@ const updateTaskPosition = async (req, res) => {
         res.json({ task });
     }
     catch (error) {
-        console.error('Update task position error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updateTaskPosition = updateTaskPosition;
 // --- Subtask endpoints ---
 // GET /api/tasks/:id/subtasks
-const getSubtasks = async (req, res) => {
+const getSubtasks = async (req, res, next) => {
     try {
         const parentId = req.params.id;
         const subtasks = await db_1.default.task.findMany({
@@ -649,13 +675,12 @@ const getSubtasks = async (req, res) => {
         res.json({ subtasks });
     }
     catch (error) {
-        console.error('Get subtasks error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getSubtasks = getSubtasks;
 // POST /api/tasks/:id/subtasks
-const createSubtask = async (req, res) => {
+const createSubtask = async (req, res, next) => {
     try {
         const parentId = req.params.id;
         const { title, assignedTo, dueDate, priority, customFields } = req.body;
@@ -713,13 +738,12 @@ const createSubtask = async (req, res) => {
         res.status(201).json({ subtask });
     }
     catch (error) {
-        console.error('Create subtask error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.createSubtask = createSubtask;
 // POST /api/tasks/:id/dependencies
-const addDependency = async (req, res) => {
+const addDependency = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { blockingTaskId } = req.body;
@@ -732,6 +756,37 @@ const addDependency = async (req, res) => {
             res.status(404).json({ message: 'Task not found' });
             return;
         }
+        // --- Circular Dependency Detection (BFS, max 20 hops) ---
+        // We check: would adding (blockingTaskId → id) create a cycle?
+        // i.e., is `id` already reachable FROM `blockingTaskId` through existing dependencies?
+        const visited = new Set();
+        const queue = [id]; // start from the dependent task
+        const MAX_DEPTH = 20;
+        let depth = 0;
+        while (queue.length > 0 && depth < MAX_DEPTH) {
+            const current = queue.shift();
+            if (visited.has(current))
+                continue;
+            visited.add(current);
+            // If we reach blockingTaskId while traversing from id, it means id already
+            // blocks blockingTaskId, creating a cycle if we add blockingTaskId → id.
+            if (current === blockingTaskId) {
+                res.status(400).json({ message: 'Circular dependency detected. This would create an infinite dependency loop.' });
+                return;
+            }
+            // Find all tasks that `current` blocks (i.e. current is a blocking task for these)
+            const outgoing = await db_1.default.taskDependency.findMany({
+                where: { blockingTaskId: current },
+                select: { dependentTaskId: true },
+            });
+            for (const dep of outgoing) {
+                if (!visited.has(dep.dependentTaskId)) {
+                    queue.push(dep.dependentTaskId);
+                }
+            }
+            depth++;
+        }
+        // --- End Circular Dependency Detection ---
         const dependency = await db_1.default.taskDependency.create({
             data: {
                 dependentTaskId: id,
@@ -750,7 +805,7 @@ const addDependency = async (req, res) => {
 };
 exports.addDependency = addDependency;
 // DELETE /api/tasks/:id/dependencies/:blockingTaskId
-const removeDependency = async (req, res) => {
+const removeDependency = async (req, res, next) => {
     try {
         const id = req.params.id;
         const blockingTaskId = req.params.blockingTaskId;

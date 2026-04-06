@@ -9,11 +9,11 @@ import { fetchDepartments } from '../../store/slices/departmentSlice';
 import { fetchClients } from '../../store/slices/clientSlice';
 import toast from 'react-hot-toast';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import { Card, CardContent } from '../../components/ui/Card';
+
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Avatar from '../../components/Avatar';
-import { Calendar, Users, Shield, ArrowLeft, Settings, Plus, Archive, Tag, UserPlus, Trash2, Search, LayoutGrid, List as ListIcon, Flag, MessageCircle, Network, FileStack, FileText } from 'lucide-react';
+import { Calendar, Users, Shield, ArrowLeft, Settings, Plus, Archive, UserPlus, Trash2, Search, LayoutGrid, List as ListIcon, Flag, MessageCircle, Network, FileStack, FileText } from 'lucide-react';
 import CustomSelect from '../../components/ui/CustomSelect';
 import ProjectMilestones from './ProjectMilestones';
 import ProjectChat from './ProjectChat';

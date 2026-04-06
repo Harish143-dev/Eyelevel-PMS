@@ -10,7 +10,7 @@ const activity_service_1 = require("../services/activity.service");
  * GET /api/roles
  * Lists all roles for the user's company.
  */
-const getRoles = async (req, res) => {
+const getRoles = async (req, res, next) => {
     try {
         const user = await db_1.default.user.findUnique({
             where: { id: req.user.id },
@@ -34,11 +34,27 @@ const getRoles = async (req, res) => {
             },
             orderBy: [{ isSystemRole: 'desc' }, { name: 'asc' }],
         });
-        res.json({ roles });
+        // Also fetch users in the company to map legacy string-enum roles correctly to system roles
+        const usersInCompany = await db_1.default.user.findMany({
+            where: user?.companyId ? { companyId: user.companyId } : {},
+            select: { role: true, roleId: true }
+        });
+        const mappedRoles = roles.map((r) => {
+            const dbCount = r._count?.users || 0;
+            let stringMatchCount = 0;
+            if (r.isSystemRole) {
+                // Case-insensitive match for enum vs name (e.g. 'admin' vs 'Admin')
+                stringMatchCount = usersInCompany.filter(u => u.role.toLowerCase() === r.name.toLowerCase() && !u.roleId).length;
+            }
+            return {
+                ...r,
+                _count: { users: dbCount + stringMatchCount }
+            };
+        });
+        res.json({ roles: mappedRoles });
     }
     catch (error) {
-        console.error('Get roles error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getRoles = getRoles;
@@ -46,7 +62,7 @@ exports.getRoles = getRoles;
  * GET /api/roles/:id
  * Get a single role by ID.
  */
-const getRoleById = async (req, res) => {
+const getRoleById = async (req, res, next) => {
     try {
         const { id } = req.params;
         const role = await db_1.default.role.findUnique({
@@ -59,11 +75,22 @@ const getRoleById = async (req, res) => {
             res.status(404).json({ message: 'Role not found' });
             return;
         }
-        res.json({ role });
+        let stringMatchCount = 0;
+        if (role.isSystemRole) {
+            // Manual count for users with matching enum but no roleId
+            const users = await db_1.default.user.findMany({
+                where: { companyId: role.companyId, roleId: null }
+            });
+            stringMatchCount = users.filter(u => u.role.toLowerCase() === role.name.toLowerCase()).length;
+        }
+        const mappedRole = {
+            ...role,
+            _count: { users: (role._count?.users || 0) + stringMatchCount }
+        };
+        res.json({ role: mappedRole });
     }
     catch (error) {
-        console.error('Get role error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getRoleById = getRoleById;
@@ -72,7 +99,7 @@ exports.getRoleById = getRoleById;
  * Create a new custom role.
  * Body: { name, permissions }
  */
-const createRole = async (req, res) => {
+const createRole = async (req, res, next) => {
     try {
         const { name, permissions } = req.body;
         if (!name || name.trim().length < 2) {
@@ -110,8 +137,7 @@ const createRole = async (req, res) => {
         res.status(201).json({ role, message: 'Role created successfully' });
     }
     catch (error) {
-        console.error('Create role error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.createRole = createRole;
@@ -120,7 +146,7 @@ exports.createRole = createRole;
  * Update a role's name and/or permissions.
  * Body: { name?, permissions? }
  */
-const updateRole = async (req, res) => {
+const updateRole = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { name, permissions } = req.body;
@@ -150,8 +176,7 @@ const updateRole = async (req, res) => {
         res.json({ role, message: 'Role updated successfully' });
     }
     catch (error) {
-        console.error('Update role error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updateRole = updateRole;
@@ -159,7 +184,7 @@ exports.updateRole = updateRole;
  * DELETE /api/roles/:id
  * Delete a custom role. System roles cannot be deleted.
  */
-const deleteRole = async (req, res) => {
+const deleteRole = async (req, res, next) => {
     try {
         const { id } = req.params;
         const existing = await db_1.default.role.findUnique({
@@ -185,8 +210,7 @@ const deleteRole = async (req, res) => {
         res.json({ message: 'Role deleted successfully' });
     }
     catch (error) {
-        console.error('Delete role error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.deleteRole = deleteRole;

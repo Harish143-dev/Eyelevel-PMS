@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.completeOnboarding = exports.onboardingStep4 = exports.onboardingStep3 = exports.onboardingStep2 = exports.onboardingStep1 = exports.getOnboardingStatus = void 0;
 const db_1 = __importDefault(require("../config/db"));
-const permissions_1 = require("../config/permissions");
 const activity_service_1 = require("../services/activity.service");
 /**
  * GET /api/onboarding/status
@@ -56,115 +55,39 @@ const getOnboardingStatus = async (req, res) => {
 };
 exports.getOnboardingStatus = getOnboardingStatus;
 /**
- * POST /api/onboarding/step-1 — Company Profile
- * Creates the company and links the current user to it.
- * Body: { name, businessType, address }
+ * POST /api/onboarding/step-1 — Branding & Identity
+ * Updates the company branding and business details.
+ * Body: { businessType, address, primaryColor, logoUrl }
  */
 const onboardingStep1 = async (req, res) => {
     try {
-        const { name, businessType, address } = req.body;
-        if (!name || name.trim().length < 2) {
-            res.status(400).json({ message: 'Company name is required (min 2 characters)' });
-            return;
-        }
+        const { businessType, address, primaryColor, logoUrl } = req.body;
         const userId = req.user.id;
-        // Check if user already has a company
-        const existingUser = await db_1.default.user.findUnique({
+        const user = await db_1.default.user.findUnique({
             where: { id: userId },
             select: { companyId: true },
         });
-        let companyId = existingUser?.companyId;
-        if (companyId) {
-            // Update existing company
-            await db_1.default.company.update({
-                where: { id: companyId },
-                data: {
-                    name: name.trim(),
-                    setupStep: 2,
-                    features: permissions_1.DefaultFeatures,
-                },
-            });
-            // Upsert settings
-            await db_1.default.companySettings.upsert({
-                where: { companyId },
-                create: {
-                    companyId,
-                    businessType: businessType || null,
-                    address: address || null,
-                },
-                update: {
-                    businessType: businessType || null,
-                    address: address || null,
-                },
-            });
+        if (!user?.companyId) {
+            res.status(400).json({ message: 'No company found for this user' });
+            return;
         }
-        else {
-            // Create new company
-            const company = await db_1.default.company.create({
-                data: {
-                    name: name.trim(),
-                    features: permissions_1.DefaultFeatures,
-                    setupStep: 2,
-                    settings: {
-                        create: {
-                            businessType: businessType || null,
-                            address: address || null,
-                        },
-                    },
-                },
-            });
-            companyId = company.id;
-            // Link user to company
-            await db_1.default.user.update({
-                where: { id: userId },
-                data: { companyId },
-            });
-            // Create default system roles for this company
-            const roleNames = ['Admin', 'Manager', 'HR', 'Employee'];
-            for (const roleName of roleNames) {
-                const key = roleName.toLowerCase();
-                await db_1.default.role.create({
-                    data: {
-                        companyId,
-                        name: roleName,
-                        permissions: permissions_1.DefaultRolePermissions[key] || [],
-                        isSystemRole: true,
-                    },
-                });
-            }
-            // Seed Default Task Statuses
-            const defaultStatuses = [
-                { name: 'Backlog', color: '#6B7280', orderIndex: 1, isDefault: true },
-                { name: 'To Do', color: '#3B82F6', orderIndex: 2, isDefault: true },
-                { name: 'In Progress', color: '#F59E0B', orderIndex: 3, isDefault: true },
-                { name: 'QA', color: '#8B5CF6', orderIndex: 4, isDefault: true },
-                { name: 'Done', color: '#10B981', orderIndex: 5, isDefault: true }
-            ];
-            await db_1.default.customTaskStatus.createMany({
-                data: defaultStatuses.map(s => ({ ...s, companyId: companyId }))
-            });
-            // Seed Default Task Priorities
-            const defaultPriorities = [
-                { name: 'Low', color: '#9CA3AF', icon: 'chevron-down', orderIndex: 1 },
-                { name: 'Medium', color: '#3B82F6', icon: 'minus', orderIndex: 2 },
-                { name: 'High', color: '#F59E0B', icon: 'chevron-up', orderIndex: 3 },
-                { name: 'Urgent', color: '#EF4444', icon: 'alert-circle', orderIndex: 4 }
-            ];
-            await db_1.default.customTaskPriority.createMany({
-                data: defaultPriorities.map(p => ({ ...p, companyId: companyId }))
-            });
-            // Assign admin role to the company creator
-            const adminRole = await db_1.default.role.findFirst({
-                where: { companyId, name: 'Admin', isSystemRole: true },
-            });
-            if (adminRole) {
-                await db_1.default.user.update({
-                    where: { id: userId },
-                    data: { roleId: adminRole.id },
-                });
-            }
-        }
-        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_STEP_1', 'company', companyId, `Created company "${name}"`);
+        const companyId = user.companyId;
+        // Update Company Settings
+        await db_1.default.companySettings.update({
+            where: { companyId },
+            data: {
+                businessType: businessType || null,
+                address: address || null,
+                primaryColor: primaryColor || '#1E40AF',
+                logoUrl: logoUrl || null,
+            },
+        });
+        // Advance to step 2
+        await db_1.default.company.update({
+            where: { id: companyId },
+            data: { setupStep: 2 },
+        });
+        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_STEP_1', 'company', companyId, `Updated branding and business identity`);
         res.json({ message: 'Step 1 completed', setupStep: 2, companyId });
     }
     catch (error) {
@@ -257,7 +180,7 @@ exports.onboardingStep3 = onboardingStep3;
  */
 const onboardingStep4 = async (req, res) => {
     try {
-        const { emails } = req.body;
+        const { emails, features } = req.body;
         const userId = req.user.id;
         const user = await db_1.default.user.findUnique({
             where: { id: userId },
@@ -269,11 +192,15 @@ const onboardingStep4 = async (req, res) => {
         }
         // For now, we log the invited emails. In the future, this sends invitation emails.
         const invitedCount = Array.isArray(emails) ? emails.length : 0;
+        const updateData = { setupStep: 5 };
+        if (features) {
+            updateData.features = features;
+        }
         await db_1.default.company.update({
             where: { id: user.companyId },
-            data: { setupStep: 5 },
+            data: updateData,
         });
-        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_STEP_4', 'company', user.companyId, `Invited ${invitedCount} team members`);
+        await (0, activity_service_1.logActivity)(userId, 'ONBOARDING_STEP_4', 'company', user.companyId, `Invited ${invitedCount} team members and saved features`);
         res.json({ message: 'Step 4 completed', setupStep: 5, invitedCount });
     }
     catch (error) {

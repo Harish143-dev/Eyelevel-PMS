@@ -9,8 +9,10 @@ const auth_middleware_1 = require("../middleware/auth.middleware");
 const role_middleware_1 = require("../middleware/role.middleware");
 const permission_middleware_1 = require("../middleware/permission.middleware");
 const permissions_1 = require("../config/permissions");
+const feature_middleware_1 = require("../middleware/feature.middleware");
 const router = express_1.default.Router();
 router.use(auth_middleware_1.verifyJWT);
+router.use((0, feature_middleware_1.checkFeature)('hrManagement'));
 router.get('/', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.DEPARTMENT_VIEW), department_controller_1.getDepartments);
 router.get('/:id', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.DEPARTMENT_VIEW), department_controller_1.getDepartmentById);
 // Admin only routes

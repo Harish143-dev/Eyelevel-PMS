@@ -10,7 +10,7 @@ const permissions_1 = require("../config/permissions");
 const router = (0, express_1.Router)();
 router.use(auth_middleware_1.verifyJWT);
 router.use((0, feature_middleware_1.checkFeature)('analytics'));
-router.get('/workload', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getGlobalWorkload);
+router.get('/workload', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getGlobalWorkload);
 router.get('/projects/:projectId/workload', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getProjectWorkload);
 router.get('/projects/:projectId/burndown', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getProjectBurndown);
 router.get('/productivity-heatmap', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.ANALYTICS_VIEW), analytics_controller_1.getProductivityHeatmap);

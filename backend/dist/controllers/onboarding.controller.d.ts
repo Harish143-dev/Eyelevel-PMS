@@ -6,9 +6,9 @@ import { AuthRequest } from '../middleware/auth.middleware';
  */
 export declare const getOnboardingStatus: (req: AuthRequest, res: Response) => Promise<void>;
 /**
- * POST /api/onboarding/step-1 — Company Profile
- * Creates the company and links the current user to it.
- * Body: { name, businessType, address }
+ * POST /api/onboarding/step-1 — Branding & Identity
+ * Updates the company branding and business details.
+ * Body: { businessType, address, primaryColor, logoUrl }
  */
 export declare const onboardingStep1: (req: AuthRequest, res: Response) => Promise<void>;
 /**

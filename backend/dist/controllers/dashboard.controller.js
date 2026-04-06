@@ -6,22 +6,26 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUserDashboard = exports.getAdminDashboard = void 0;
 const db_1 = __importDefault(require("../config/db"));
 // GET /api/dashboard/admin
-const getAdminDashboard = async (req, res) => {
+const getAdminDashboard = async (req, res, next) => {
     try {
         const now = new Date();
         const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        // TENANT ISOLATION: scope all queries to user's company
+        const companyId = req.user.companyId;
+        const tenantFilter = companyId ? { companyId } : {};
+        const projectTenantFilter = companyId ? { companyId } : {};
         // Stats
         const [totalProjects, activeUsers, tasksThisMonth, completedTasks, pendingUsers] = await Promise.all([
-            db_1.default.project.count({ where: { isArchived: false, isDeleted: false } }),
-            db_1.default.user.count({ where: { isActive: true, status: 'ACTIVE' } }),
-            db_1.default.task.count({ where: { createdAt: { gte: firstDayOfMonth }, parentTaskId: null, isDeleted: false } }),
-            db_1.default.task.count({ where: { status: 'completed', parentTaskId: null, isDeleted: false } }),
-            db_1.default.user.count({ where: { status: 'PENDING' } }),
+            db_1.default.project.count({ where: { isArchived: false, isDeleted: false, ...projectTenantFilter } }),
+            db_1.default.user.count({ where: { isActive: true, status: 'ACTIVE', ...tenantFilter } }),
+            db_1.default.task.count({ where: { createdAt: { gte: firstDayOfMonth }, parentTaskId: null, isDeleted: false, ...(companyId ? { project: { companyId } } : {}) } }),
+            db_1.default.task.count({ where: { status: 'completed', parentTaskId: null, isDeleted: false, ...(companyId ? { project: { companyId } } : {}) } }),
+            db_1.default.user.count({ where: { status: 'PENDING', ...tenantFilter } }),
         ]);
-        // Task status breakdown
+        // Task status breakdown — scoped to tenant
         const taskCounts = await db_1.default.task.groupBy({
             by: ['status'],
-            where: { parentTaskId: null, isDeleted: false },
+            where: { parentTaskId: null, isDeleted: false, ...(companyId ? { project: { companyId } } : {}) },
             _count: { status: true },
         });
         const taskStatusBreakdown = {
@@ -34,9 +38,9 @@ const getAdminDashboard = async (req, res) => {
         taskCounts.forEach((tc) => {
             taskStatusBreakdown[tc.status] = tc._count.status;
         });
-        // Project progress
+        // Project progress — scoped to tenant
         const projects = await db_1.default.project.findMany({
-            where: { isArchived: false, isDeleted: false },
+            where: { isArchived: false, isDeleted: false, ...projectTenantFilter },
             select: {
                 id: true,
                 name: true,
@@ -62,21 +66,23 @@ const getAdminDashboard = async (req, res) => {
                 progress: totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0,
             };
         }));
-        // Recent activity
+        // Recent activity — scoped to tenant via user's company
         const recentActivity = await db_1.default.activityLog.findMany({
             take: 5,
             orderBy: { createdAt: 'desc' },
+            where: companyId ? { user: { companyId } } : {},
             include: {
                 user: { select: { id: true, name: true, avatarColor: true } },
             },
         });
-        // Overdue tasks
+        // Overdue tasks — scoped to tenant
         const overdueTasks = await db_1.default.task.findMany({
             where: {
                 dueDate: { lt: now },
                 status: { notIn: ['completed', 'cancelled'] },
                 parentTaskId: null,
                 isDeleted: false,
+                ...(companyId ? { project: { companyId } } : {}),
             },
             include: {
                 assignee: { select: { id: true, name: true, avatarColor: true } },
@@ -94,13 +100,12 @@ const getAdminDashboard = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('Admin dashboard error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getAdminDashboard = getAdminDashboard;
 // GET /api/dashboard/user
-const getUserDashboard = async (req, res) => {
+const getUserDashboard = async (req, res, next) => {
     try {
         const userId = req.user.id;
         const now = new Date();
@@ -195,8 +200,7 @@ const getUserDashboard = async (req, res) => {
         });
     }
     catch (error) {
-        console.error('User dashboard error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getUserDashboard = getUserDashboard;

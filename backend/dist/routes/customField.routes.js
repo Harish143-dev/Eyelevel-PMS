@@ -4,10 +4,12 @@ const express_1 = require("express");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const permission_middleware_1 = require("../middleware/permission.middleware");
 const permissions_1 = require("../config/permissions");
+const feature_middleware_1 = require("../middleware/feature.middleware");
 const customField_controller_1 = require("../controllers/customField.controller");
 const router = (0, express_1.Router)();
 // Apply auth middleware to all routes
 router.use(auth_middleware_1.verifyJWT);
+router.use((0, feature_middleware_1.checkFeature)('customFields'));
 // Definitions CRUD (Admins only / COMPANY_SETTINGS permission)
 router.get('/', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.COMPANY_SETTINGS), customField_controller_1.getCustomFields);
 router.post('/', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.COMPANY_SETTINGS), customField_controller_1.createCustomField);

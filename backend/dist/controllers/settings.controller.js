@@ -3,8 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateCompanySettings = exports.getCompanySettings = void 0;
+exports.updateFeatures = exports.updateCompanySettings = exports.getCompanySettings = void 0;
 const db_1 = __importDefault(require("../config/db"));
+const activity_service_1 = require("../services/activity.service");
 const getCompanySettings = async (req, res) => {
     try {
         const companyId = req.user?.companyId;
@@ -17,7 +18,7 @@ const getCompanySettings = async (req, res) => {
         });
         const company = await db_1.default.company.findUnique({
             where: { id: companyId },
-            select: { name: true, status: true, setupCompleted: true }
+            select: { name: true, status: true, setupCompleted: true, features: true }
         });
         res.json({ company, settings });
     }
@@ -36,12 +37,20 @@ const updateCompanySettings = async (req, res) => {
         }
         const data = { ...req.body };
         // separate company fields
+        const companyUpdateData = {};
         if (data.companyName) {
+            companyUpdateData.name = data.companyName;
+            delete data.companyName;
+        }
+        if (data.features) {
+            companyUpdateData.features = data.features;
+            delete data.features;
+        }
+        if (Object.keys(companyUpdateData).length > 0) {
             await db_1.default.company.update({
                 where: { id: companyId },
-                data: { name: data.companyName }
+                data: companyUpdateData
             });
-            delete data.companyName;
         }
         const setObj = {};
         if (data.businessType !== undefined)
@@ -111,4 +120,47 @@ const updateCompanySettings = async (req, res) => {
     }
 };
 exports.updateCompanySettings = updateCompanySettings;
+// PATCH /api/settings/company/features — Admin only, updates only feature flags
+const updateFeatures = async (req, res) => {
+    try {
+        const companyId = req.user?.companyId;
+        if (!companyId) {
+            res.status(400).json({ error: 'No company attached' });
+            return;
+        }
+        const { features } = req.body;
+        if (!features || typeof features !== 'object') {
+            res.status(400).json({ error: 'A valid features object is required' });
+            return;
+        }
+        // Merge with existing features to allow partial updates
+        const company = await db_1.default.company.findUnique({
+            where: { id: companyId },
+            select: { features: true },
+        });
+        const existingFeatures = company?.features || {};
+        const mergedFeatures = { ...existingFeatures, ...features };
+        const updated = await db_1.default.company.update({
+            where: { id: companyId },
+            data: { features: mergedFeatures },
+            select: { features: true },
+        });
+        // --- BUG-007 Fix: Audit log for every feature toggle ---
+        // Build a human-readable list of what changed
+        const changedKeys = Object.keys(features).filter(key => features[key] !== existingFeatures[key]);
+        if (changedKeys.length > 0 && req.user?.id) {
+            const summary = changedKeys
+                .map(k => `${k}: ${features[k] ? 'enabled' : 'disabled'}`)
+                .join(', ');
+            await (0, activity_service_1.logActivity)(req.user.id, 'UPDATED_FEATURES', 'company', companyId, `Module/feature settings updated — ${summary}`);
+        }
+        // --- End BUG-007 Fix ---
+        res.json({ message: 'Features updated successfully', features: updated.features });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Failed to update features' });
+    }
+};
+exports.updateFeatures = updateFeatures;
 //# sourceMappingURL=settings.controller.js.map

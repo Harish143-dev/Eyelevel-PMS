@@ -192,6 +192,7 @@ exports.DefaultRolePermissions = {
     employee: [
         exports.Permission.PROJECT_VIEW,
         exports.Permission.TASK_VIEW, exports.Permission.TASK_CREATE, exports.Permission.TASK_EDIT,
+        exports.Permission.ANALYTICS_VIEW,
         exports.Permission.LEAVE_VIEW,
         exports.Permission.PERFORMANCE_VIEW,
     ],

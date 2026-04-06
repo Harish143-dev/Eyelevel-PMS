@@ -18,18 +18,15 @@ const checkFeature = (featureKey) => {
                 res.status(401).json({ message: 'Unauthorized' });
                 return;
             }
-            // Fetch the user's company
-            const user = await db_1.default.user.findUnique({
-                where: { id: req.user.id },
-                select: { companyId: true },
-            });
-            if (!user?.companyId) {
+            // companyId is already on req.user (set by verifyJWT) — no extra User query needed.
+            const companyId = req.user.companyId;
+            if (!companyId) {
                 // No company = no feature gating (legacy/solo users pass through)
                 next();
                 return;
             }
             const company = await db_1.default.company.findUnique({
-                where: { id: user.companyId },
+                where: { id: companyId },
                 select: { features: true, status: true },
             });
             if (!company) {

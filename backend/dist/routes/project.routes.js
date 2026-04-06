@@ -6,6 +6,8 @@ const auth_middleware_1 = require("../middleware/auth.middleware");
 const role_middleware_1 = require("../middleware/role.middleware");
 const feature_middleware_1 = require("../middleware/feature.middleware");
 const permission_middleware_1 = require("../middleware/permission.middleware");
+const validate_middleware_1 = require("../middleware/validate.middleware");
+const project_validator_1 = require("../validators/project.validator");
 const permissions_1 = require("../config/permissions");
 const roles_1 = require("../config/roles");
 const rateLimit_middleware_1 = require("../middleware/rateLimit.middleware");
@@ -17,12 +19,12 @@ router.get('/deleted', role_middleware_1.requireStaff, (0, permission_middleware
 router.get('/categories', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_VIEW), project_controller_1.getCategories);
 router.get('/:id', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_VIEW), project_controller_1.getProjectById);
 router.patch('/:id/restore', role_middleware_1.requireStaff, (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_EDIT), project_controller_1.restoreProject);
-router.post('/', (0, role_middleware_1.requireRole)(roles_1.Role.MANAGER, roles_1.Role.ADMIN), (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_CREATE), project_controller_1.createProject);
-router.put('/:id', (0, role_middleware_1.requireRole)(roles_1.Role.MANAGER, roles_1.Role.ADMIN), (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_EDIT), project_controller_1.updateProject);
+router.post('/', (0, role_middleware_1.requireRole)(roles_1.Role.MANAGER, roles_1.Role.ADMIN), (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_CREATE), (0, validate_middleware_1.validate)(project_validator_1.createProjectSchema), project_controller_1.createProject);
+router.put('/:id', (0, role_middleware_1.requireRole)(roles_1.Role.MANAGER, roles_1.Role.ADMIN), (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_EDIT), (0, validate_middleware_1.validate)(project_validator_1.updateProjectSchema), project_controller_1.updateProject);
 router.delete('/:id', rateLimit_middleware_1.sensitiveLimiter, (0, role_middleware_1.requireRole)(roles_1.Role.MANAGER, roles_1.Role.ADMIN), (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_DELETE), project_controller_1.deleteProject);
 // Members
 router.get('/:id/members', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_VIEW), project_controller_1.getMembers);
-router.post('/:id/members', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_MANAGE_MEMBERS), project_controller_1.addMember);
+router.post('/:id/members', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_MANAGE_MEMBERS), (0, validate_middleware_1.validate)(project_validator_1.addMemberSchema), project_controller_1.addMember);
 router.post('/:id/members/department/:departmentId', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_MANAGE_MEMBERS), project_controller_1.addDepartmentMembers);
 router.delete('/:id/members/:userId', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.PROJECT_MANAGE_MEMBERS), project_controller_1.removeMember);
 // Archive

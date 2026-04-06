@@ -10,7 +10,7 @@ const activity_service_1 = require("../services/activity.service");
  * GET /api/companies
  * List all companies (super admin / platform admin).
  */
-const getCompanies = async (req, res) => {
+const getCompanies = async (req, res, next) => {
     try {
         const companies = await db_1.default.company.findMany({
             include: {
@@ -22,8 +22,7 @@ const getCompanies = async (req, res) => {
         res.json({ companies });
     }
     catch (error) {
-        console.error('Get companies error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getCompanies = getCompanies;
@@ -31,7 +30,7 @@ exports.getCompanies = getCompanies;
  * GET /api/companies/:id
  * Get a single company's details.
  */
-const getCompanyById = async (req, res) => {
+const getCompanyById = async (req, res, next) => {
     try {
         const { id } = req.params;
         const company = await db_1.default.company.findUnique({
@@ -48,8 +47,7 @@ const getCompanyById = async (req, res) => {
         res.json({ company });
     }
     catch (error) {
-        console.error('Get company error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getCompanyById = getCompanyById;
@@ -58,7 +56,7 @@ exports.getCompanyById = getCompanyById;
  * Toggle features for a company.
  * Body: { features: { projectManagement: true, teamChat: false, ... } }
  */
-const updateCompanyFeatures = async (req, res) => {
+const updateCompanyFeatures = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { features } = req.body;
@@ -83,8 +81,7 @@ const updateCompanyFeatures = async (req, res) => {
         res.json({ company: updated, message: 'Features updated successfully' });
     }
     catch (error) {
-        console.error('Update company features error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updateCompanyFeatures = updateCompanyFeatures;
@@ -93,7 +90,7 @@ exports.updateCompanyFeatures = updateCompanyFeatures;
  * Update a company's status (active, suspended, etc.)
  * Body: { status }
  */
-const updateCompanyStatus = async (req, res) => {
+const updateCompanyStatus = async (req, res, next) => {
     try {
         const { id } = req.params;
         const { status } = req.body;
@@ -109,8 +106,7 @@ const updateCompanyStatus = async (req, res) => {
         res.json({ company: updated, message: `Company status updated to ${status}` });
     }
     catch (error) {
-        console.error('Update company status error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updateCompanyStatus = updateCompanyStatus;
@@ -118,7 +114,7 @@ exports.updateCompanyStatus = updateCompanyStatus;
  * GET /api/companies/my
  * Get the current user's company with full details.
  */
-const getMyCompany = async (req, res) => {
+const getMyCompany = async (req, res, next) => {
     try {
         const user = await db_1.default.user.findUnique({
             where: { id: req.user.id },
@@ -138,8 +134,7 @@ const getMyCompany = async (req, res) => {
         res.json({ company });
     }
     catch (error) {
-        console.error('Get my company error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getMyCompany = getMyCompany;

@@ -10,5 +10,6 @@ router.use(auth_middleware_1.verifyJWT);
 // Only admins / authorized users with COMPANY_SETTINGS should be able to alter company wide settings
 router.get('/company', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.COMPANY_SETTINGS), settings_controller_1.getCompanySettings);
 router.put('/company', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.COMPANY_SETTINGS), settings_controller_1.updateCompanySettings);
+router.patch('/company/features', (0, permission_middleware_1.checkPermission)(permissions_1.Permission.COMPANY_SETTINGS), settings_controller_1.updateFeatures);
 exports.default = router;
 //# sourceMappingURL=settings.routes.js.map

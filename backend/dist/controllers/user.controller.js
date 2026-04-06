@@ -3,23 +3,40 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUser = exports.updatePassword = exports.updateUserStatus = exports.updateUserRole = exports.updateUser = exports.createUser = exports.getUserById = exports.getActiveUsers = exports.getUsers = void 0;
+exports.updatePreferences = exports.getPreferences = exports.deleteUser = exports.updatePassword = exports.updateUserStatus = exports.updateUserRole = exports.updateUser = exports.createUser = exports.getUserById = exports.getActiveUsers = exports.getUsers = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const db_1 = __importDefault(require("../config/db"));
 const activity_service_1 = require("../services/activity.service");
 const pagination_1 = require("../utils/pagination");
+const security_1 = require("../utils/security");
 const roles_1 = require("../config/roles");
 const AVATAR_COLORS = [
     '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b',
     '#10b981', '#3b82f6', '#ef4444', '#14b8a6',
 ];
+// Sensitive financial fields that should only be visible to Admin/HR or the user themselves
+const SENSITIVE_FINANCIAL_FIELDS = ['bankName', 'accountNumber', 'ifscCode', 'panNumber'];
+const stripSensitiveFields = (user, requesterId, requesterRole) => {
+    const canSeeSensitive = (0, roles_1.isAdmin)(requesterRole) || (0, roles_1.isHR)(requesterRole) || user.id === requesterId;
+    if (canSeeSensitive)
+        return user;
+    const sanitized = { ...user };
+    for (const field of SENSITIVE_FINANCIAL_FIELDS) {
+        delete sanitized[field];
+    }
+    return sanitized;
+};
 // GET /api/users — admin/super_admin only
-const getUsers = async (req, res) => {
+const getUsers = async (req, res, next) => {
     try {
         const role = req.query.role;
         const status = req.query.status;
         const search = req.query.search;
         const where = { deletedAt: null };
+        // TENANT ISOLATION: scope to user's company
+        if (req.user.companyId) {
+            where.companyId = req.user.companyId;
+        }
         if (role)
             where.role = role;
         if (status)
@@ -73,23 +90,27 @@ const getUsers = async (req, res) => {
             }),
             db_1.default.user.count({ where }),
         ]);
+        // Strip sensitive financial PII based on requester role
+        const sanitizedUsers = users.map(u => stripSensitiveFields(u, req.user.id, req.user.role));
         res.json({
-            ...(0, pagination_1.paginatedResponse)(users, total, paginationParams),
+            ...(0, pagination_1.paginatedResponse)(sanitizedUsers, total, paginationParams),
             // Keep 'users' root key for backwards compatibility with existing frontend
-            users
+            users: sanitizedUsers
         });
     }
     catch (error) {
-        console.error('Get users error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getUsers = getUsers;
 // GET /api/users/active — authenticated users only
-const getActiveUsers = async (req, res) => {
+const getActiveUsers = async (req, res, next) => {
     try {
         const users = await db_1.default.user.findMany({
-            where: { isActive: true },
+            where: {
+                isActive: true,
+                ...(req.user?.companyId ? { companyId: req.user.companyId } : {})
+            },
             select: {
                 id: true,
                 name: true,
@@ -103,13 +124,12 @@ const getActiveUsers = async (req, res) => {
         res.json({ users });
     }
     catch (error) {
-        console.error('Get active users error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getActiveUsers = getActiveUsers;
 // GET /api/users/:id
-const getUserById = async (req, res) => {
+const getUserById = async (req, res, next) => {
     try {
         const id = req.params.id;
         const user = await db_1.default.user.findUnique({
@@ -151,6 +171,7 @@ const getUserById = async (req, res) => {
                 reportingManager: {
                     select: { id: true, name: true, email: true }
                 },
+                companyId: true,
                 _count: {
                     select: {
                         assignedTasks: true,
@@ -164,25 +185,32 @@ const getUserById = async (req, res) => {
             res.status(404).json({ message: 'User not found' });
             return;
         }
-        res.json({ user });
+        // TENANT ISOLATION: verify user belongs to same company
+        if (req.user.companyId && user.companyId && user.companyId !== req.user.companyId) {
+            res.status(404).json({ message: 'User not found' });
+            return;
+        }
+        // Strip sensitive financial PII based on requester role
+        const sanitizedUser = stripSensitiveFields(user, req.user.id, req.user.role);
+        res.json({ user: sanitizedUser });
     }
     catch (error) {
-        console.error('Get user error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getUserById = getUserById;
 // POST /api/users — admin/super_admin only (create user directly)
-const createUser = async (req, res) => {
+const createUser = async (req, res, next) => {
     try {
         const { name, email, password, role } = req.body;
         if (!name || !email || !password) {
             res.status(400).json({ message: 'Name, email, and password are required' });
             return;
         }
-        const existing = await db_1.default.user.findUnique({ where: { email } });
+        const normalizedEmail = email.toLowerCase().trim();
+        const existing = await db_1.default.user.findUnique({ where: { email: normalizedEmail } });
         if (existing) {
-            res.status(409).json({ message: 'Email already in use' });
+            res.status(409).json({ message: 'Email already exists' });
             return;
         }
         // Only admins or managers can create other users (usually HR)
@@ -191,19 +219,36 @@ const createUser = async (req, res) => {
             res.status(403).json({ message: 'Insufficient permission to create users' });
             return;
         }
-        if (roles_1.RoleRank[req.user.role] <= roles_1.RoleRank[role] && req.user.role !== roles_1.Role.ADMIN) {
-            res.status(403).json({ message: 'You cannot create a user with a higher or equal role to yourself' });
+        // Enforce password policy
+        const policyCheck = await (0, security_1.validatePasswordWithSettings)(password, req.user.companyId || null);
+        if (!policyCheck.valid) {
+            res.status(400).json({ message: policyCheck.message });
             return;
         }
         const passwordHash = await bcryptjs_1.default.hash(password, 12);
         const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
+        const userRole = Object.values(roles_1.Role).includes(role) ? role : roles_1.Role.EMPLOYEE;
+        // FIND MATCHING ROLE ID for the company
+        let roleId = null;
+        if (req.user.companyId) {
+            const match = await db_1.default.role.findFirst({
+                where: {
+                    companyId: req.user.companyId,
+                    name: { equals: userRole, mode: 'insensitive' }
+                }
+            });
+            if (match)
+                roleId = match.id;
+        }
         const user = await db_1.default.user.create({
             data: {
                 name,
-                email,
+                email: normalizedEmail,
                 passwordHash,
-                role: Object.values(roles_1.Role).includes(role) ? role : roles_1.Role.EMPLOYEE,
+                role: userRole,
+                roleId,
                 status: 'ACTIVE', // Admin-created users are auto-active
+                companyId: req.user.companyId || null, // TENANT ISOLATION: inherit creator's company
                 // Only Admin or HR can set designation during creation
                 designation: ((0, roles_1.isAdmin)(req.user.role) || (0, roles_1.isHR)(req.user.role)) ? (req.body.designation || null) : null,
                 avatarColor,
@@ -224,13 +269,12 @@ const createUser = async (req, res) => {
         res.status(201).json({ user });
     }
     catch (error) {
-        console.error('Create user error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.createUser = createUser;
 // PUT /api/users/:id
-const updateUser = async (req, res) => {
+const updateUser = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { name, email, designation, skills, joiningDate, emergencyContact, reportingManagerId, phoneNumber, bio, dateOfBirth, gender, bloodGroup, address, githubUrl, twitterUrl, linkedinUrl, portfolioUrl, employeeId, employmentType, workLocation, bankName, accountNumber, ifscCode, panNumber } = req.body;
@@ -242,10 +286,54 @@ const updateUser = async (req, res) => {
             res.status(403).json({ message: 'Not allowed to update other users' });
             return;
         }
-        const dataToUpdate = { name, email };
-        // Role update: ONLY Admin
-        if (req.body.role !== undefined && (0, roles_1.isAdmin)(requesterRole)) {
-            dataToUpdate.role = req.body.role;
+        const dataToUpdate = { name };
+        // Validate email uniqueness and require password for self-email change
+        if (email) {
+            const existingUser = await db_1.default.user.findUnique({ where: { id } });
+            if (!existingUser) {
+                res.status(404).json({ message: 'User not found' });
+                return;
+            }
+            // If email is being changed, we require current password verification for self-edits (protection)
+            if (email !== existingUser.email && isSelf) {
+                const { currentPassword } = req.body;
+                if (!currentPassword) {
+                    res.status(401).json({ message: 'Current password is required to change email' });
+                    return;
+                }
+                const isValid = await bcryptjs_1.default.compare(currentPassword, existingUser.passwordHash);
+                if (!isValid) {
+                    res.status(401).json({ message: 'Invalid current password' });
+                    return;
+                }
+            }
+            const normalizedEmail = email.toLowerCase().trim();
+            const existingWithEmail = await db_1.default.user.findUnique({ where: { email: normalizedEmail } });
+            if (existingWithEmail && existingWithEmail.id !== id) {
+                res.status(409).json({ message: 'Email already exists' });
+                return;
+            }
+            dataToUpdate.email = normalizedEmail;
+        }
+        // Role update: ONLY Admin — with explicit RoleRank guard to prevent escalation
+        if (req.body.role !== undefined) {
+            if (!(0, roles_1.isAdmin)(requesterRole)) {
+                res.status(403).json({ message: 'Only admins can change user roles' });
+                return;
+            }
+            const roleEnum = req.body.role;
+            dataToUpdate.role = roleEnum;
+            const roleRecord = await db_1.default.role.findFirst({
+                where: {
+                    OR: [
+                        { companyId: req.user.companyId },
+                        { isSystemRole: true, companyId: null }
+                    ],
+                    name: { equals: roleEnum, mode: 'insensitive' }
+                }
+            });
+            if (roleRecord)
+                dataToUpdate.roleId = roleRecord.id;
         }
         // Designation update: Admin or HR
         if (designation !== undefined && ((0, roles_1.isAdmin)(requesterRole) || (0, roles_1.isHR)(requesterRole))) {
@@ -334,19 +422,33 @@ const updateUser = async (req, res) => {
                 createdAt: true,
             },
         });
-        res.json({ user });
+        // Strip sensitive financial PII based on requester role
+        const sanitizedUser = stripSensitiveFields(user, req.user.id, req.user.role);
+        res.json({ user: sanitizedUser });
     }
     catch (error) {
-        console.error('Update user error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        // Catch Prisma unique constraint errors gracefully
+        if (error?.code === 'P2002') {
+            res.status(409).json({ message: 'A unique constraint was violated. The value is already in use.' });
+            return;
+        }
+        next(error);
     }
 };
 exports.updateUser = updateUser;
 // PATCH /api/users/:id/role — super_admin only for admin promotion, admin/super_admin for user role
-const updateUserRole = async (req, res) => {
+const updateUserRole = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { role } = req.body;
+        // --- Fix 4: Strict enum guard — reject any value not in the known role set ---
+        // This prevents undefined/arbitrary strings from bypassing RoleRank comparisons.
+        const VALID_ROLES = Object.values(roles_1.Role);
+        if (!role || !VALID_ROLES.includes(role)) {
+            res.status(400).json({ message: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` });
+            return;
+        }
+        // --- End enum guard ---
         // Only admins or those with higher rank can change roles.
         // Cannot promote someone to a rank equal/higher than your own (unless admin).
         if (req.user.role !== roles_1.Role.ADMIN) {
@@ -376,13 +478,12 @@ const updateUserRole = async (req, res) => {
         res.json({ user });
     }
     catch (error) {
-        console.error('Update role error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updateUserRole = updateUserRole;
 // PATCH /api/users/:id/status — admin/super_admin only
-const updateUserStatus = async (req, res) => {
+const updateUserStatus = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { isActive } = req.body;
@@ -410,13 +511,12 @@ const updateUserStatus = async (req, res) => {
         res.json({ user });
     }
     catch (error) {
-        console.error('Update status error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updateUserStatus = updateUserStatus;
 // PATCH /api/users/:id/password
-const updatePassword = async (req, res) => {
+const updatePassword = async (req, res, next) => {
     try {
         const id = req.params.id;
         const { currentPassword, newPassword } = req.body;
@@ -434,6 +534,18 @@ const updatePassword = async (req, res) => {
             res.status(401).json({ message: 'Current password is incorrect' });
             return;
         }
+        // Security Hardening: Prevent reusing the current password
+        const isSamePassword = await bcryptjs_1.default.compare(newPassword, user.passwordHash);
+        if (isSamePassword) {
+            res.status(400).json({ message: 'New password must be different from your current password' });
+            return;
+        }
+        // Enforce password policy
+        const policyCheck = await (0, security_1.validatePasswordWithSettings)(newPassword, req.user.companyId || null);
+        if (!policyCheck.valid) {
+            res.status(400).json({ message: policyCheck.message });
+            return;
+        }
         const passwordHash = await bcryptjs_1.default.hash(newPassword, 12);
         await db_1.default.user.update({
             where: { id },
@@ -442,15 +554,13 @@ const updatePassword = async (req, res) => {
         res.json({ message: 'Password updated successfully' });
     }
     catch (error) {
-        console.error('Update password error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.updatePassword = updatePassword;
-// DELETE /api/users/:id — super_admin only
-const deleteUser = async (req, res) => {
+// DELETE /api/users/:id — admin only
+const deleteUser = async (req, res, next) => {
     const id = req.params.id;
-    console.log('>>> [DEBUG] Entering deleteUser for ID:', id);
     try {
         if (req.user.id === id) {
             res.status(400).json({ message: 'Cannot delete your own account' });
@@ -465,25 +575,62 @@ const deleteUser = async (req, res) => {
             res.status(404).json({ message: 'User not found' });
             return;
         }
-        // Implement soft deletion by setting isDeleted and deletedAt
+        // Soft deletion: preserve audit trail by keeping record with deletedAt timestamp
         await db_1.default.user.update({
             where: { id },
             data: { deletedAt: new Date(), isActive: false }
         });
-        // Log success
         await (0, activity_service_1.logActivity)(req.user.id, 'DELETED_USER', 'employee', id, `Soft deleted user ${user.name}`);
         res.json({ message: 'User deleted successfully' });
     }
     catch (error) {
-        console.error('>>> [DEBUG] Delete error caught:', error.code, error.message);
-        res.status(500).json({
-            message: 'Database error occurred while deleting user.'
-        });
-        // Fallback for other errors (still returning 400 to avoid "Internal Server Error" generic messages)
-        res.status(400).json({
-            message: error?.message || 'Database error occurred while deleting user. They may have active associations.'
-        });
+        // Fix 5: Removed unreachable fallback — res.headersSent is always true after the 500 below.
+        next(error);
     }
 };
 exports.deleteUser = deleteUser;
+// GET /api/users/preferences
+const getPreferences = async (req, res, next) => {
+    try {
+        const user = await db_1.default.user.findUnique({
+            where: { id: req.user.id },
+            select: { preferences: true },
+        });
+        res.json(user?.preferences || { theme: 'system', language: 'en', defaultDashboardView: 'overview', itemsPerPage: 25 });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.getPreferences = getPreferences;
+// PUT /api/users/preferences
+const updatePreferences = async (req, res, next) => {
+    try {
+        const { theme, language, defaultDashboardView, itemsPerPage } = req.body;
+        // Get existing preferences to merge
+        const user = await db_1.default.user.findUnique({
+            where: { id: req.user.id },
+            select: { preferences: true },
+        });
+        const existingPrefs = user?.preferences || {};
+        const updatedUser = await db_1.default.user.update({
+            where: { id: req.user.id },
+            data: {
+                preferences: {
+                    ...existingPrefs,
+                    ...(theme && { theme }),
+                    ...(language && { language }),
+                    ...(defaultDashboardView && { defaultDashboardView }),
+                    ...(itemsPerPage && { itemsPerPage })
+                }
+            },
+            select: { preferences: true },
+        });
+        res.json(updatedUser.preferences);
+    }
+    catch (error) {
+        next(error);
+    }
+};
+exports.updatePreferences = updatePreferences;
 //# sourceMappingURL=user.controller.js.map

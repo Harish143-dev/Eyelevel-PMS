@@ -10,6 +10,7 @@ const activity_service_1 = require("../services/activity.service");
 const getClients = async (req, res) => {
     try {
         const clients = await db_1.default.client.findMany({
+            where: req.user?.companyId ? { companyId: req.user.companyId } : {},
             orderBy: { name: 'asc' },
             include: {
                 _count: {
@@ -41,6 +42,11 @@ const getClientById = async (req, res) => {
             res.status(404).json({ message: 'Client not found' });
             return;
         }
+        // TENANT ISOLATION
+        if (req.user.companyId && client.companyId && client.companyId !== req.user.companyId) {
+            res.status(404).json({ message: 'Client not found' });
+            return;
+        }
         res.json({ client });
     }
     catch (error) {
@@ -58,7 +64,7 @@ const createClient = async (req, res) => {
             return;
         }
         const client = await db_1.default.client.create({
-            data: { name, email, phone, companyName, address }
+            data: { name, email, phone, companyName, address, companyId: req.user.companyId || null }
         });
         await (0, activity_service_1.logActivity)(req.user.id, 'CLIENT_CREATED', 'client', client.id, `Created client ${name}`);
         res.status(201).json({ client });

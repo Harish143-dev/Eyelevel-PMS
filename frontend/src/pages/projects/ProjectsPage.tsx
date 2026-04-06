@@ -1342,7 +1342,7 @@ const ProjectsPage: React.FC = () => {
     const filters: { key: string; label: string; color: string; onClear: () => void }[] = [];
     if (statusFilter) {
       const colors: Record<string, string> = { planning: '#94a3b8', in_progress: '#3b82f6', completed: '#10b981', on_hold: '#f59e0b' };
-      filters.push({ key: 'status', label: statusLabel[statusFilter] || statusFilter, color: colors[statusFilter] || '#94a3b8', onClear: () => setStatusFilter('') });
+      filters.push({ key: 'status', label: getProjectStatusInfo(statusFilter).label, color: colors[statusFilter] || '#94a3b8', onClear: () => setStatusFilter('') });
     }
     if (categoryFilter) {
       filters.push({ key: 'category', label: categoryFilter, color: 'var(--primary)', onClear: () => setCategoryFilter('') });

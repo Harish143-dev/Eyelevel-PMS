@@ -41,6 +41,8 @@ const company_routes_1 = __importDefault(require("./routes/company.routes"));
 const monitoring_routes_1 = __importDefault(require("./routes/monitoring.routes"));
 const workflow_routes_1 = __importDefault(require("./routes/workflow.routes"));
 const customField_routes_1 = __importDefault(require("./routes/customField.routes"));
+const data_routes_1 = __importDefault(require("./routes/data.routes"));
+const tenant_routes_1 = __importDefault(require("./routes/tenant.routes"));
 const cron_service_1 = require("./services/cron.service");
 const rateLimit_middleware_1 = require("./middleware/rateLimit.middleware");
 const app = (0, express_1.default)();
@@ -77,7 +79,9 @@ const uploadDir = process.env.UPLOAD_DIR || './uploads';
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-app.use('/api/auth', rateLimit_middleware_1.authLimiter, auth_routes_1.default);
+// Tenant branding resolution (Public)
+app.use('/api/tenant', tenant_routes_1.default);
+app.use('/api/auth', auth_routes_1.default);
 app.use('/api/users', user_routes_1.default);
 app.use('/api/projects', project_routes_1.default);
 app.use('/api', task_routes_1.default); // task routes have both /projects/:id/tasks and /tasks/:id
@@ -112,11 +116,10 @@ app.use('/api/settings', settings_routes_1.default);
 app.use('/api/monitoring', monitoring_routes_1.default);
 app.use('/api/workflow', workflow_routes_1.default);
 app.use('/api/custom-fields', customField_routes_1.default);
-// Error handling
-app.use((err, req, res, next) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({ message: 'Internal server error' });
-});
+app.use('/api/data', data_routes_1.default);
+const errorHandler_middleware_1 = require("./middleware/errorHandler.middleware");
+// Centralized error handling
+app.use(errorHandler_middleware_1.errorHandler);
 const PORT = parseInt(process.env.PORT || '5000', 10);
 // Start background jobs
 (0, cron_service_1.initCronJobs)();

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import Button from '../../components/ui/Button';
 import CustomSelect from '../../components/ui/CustomSelect';
 import toast from 'react-hot-toast';
-import { ShieldCheck, Key, Clock, Smartphone } from 'lucide-react';
+import { Key, Clock, Smartphone } from 'lucide-react';
 
 const inputClass = "w-full text-sm px-3 py-2 bg-surface border border-border rounded-lg text-text-main focus:outline-none focus:ring-1 focus:ring-primary";
 

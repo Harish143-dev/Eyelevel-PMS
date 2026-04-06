@@ -10,107 +10,28 @@ const socket_1 = require("../config/socket");
 const notification_service_1 = require("../services/notification.service");
 const pagination_1 = require("../utils/pagination");
 const roles_1 = require("../config/roles");
+const project_service_1 = require("../services/project.service");
 // GET /api/projects
-const getProjects = async (req, res) => {
+const getProjects = async (req, res, next) => {
     try {
-        const showArchived = req.query.archived === 'true';
-        const category = req.query.category;
-        const status = req.query.status;
-        const search = req.query.search;
-        const managerId = req.query.managerId;
-        const deadline = req.query.deadline;
-        const where = {};
-        // Filter archived
-        where.isArchived = showArchived;
-        // Always exclude soft-deleted projects
-        where.isDeleted = false;
-        // Filter by category
-        if (category)
-            where.category = category;
-        // Filter by status
-        if (status)
-            where.status = status;
-        // Search by name
-        if (search) {
-            where.name = { contains: search, mode: 'insensitive' };
-        }
-        // Filter by manager (owner)
-        if (managerId) {
-            where.ownerId = managerId;
-        }
-        // Filter by deadline
-        if (deadline) {
-            const now = new Date();
-            now.setHours(0, 0, 0, 0);
-            if (deadline === 'today') {
-                const tomorrow = new Date(now);
-                tomorrow.setDate(now.getDate() + 1);
-                where.deadline = { gte: now, lt: tomorrow };
-            }
-            else if (deadline === 'this-week') {
-                const endOfWeek = new Date(now);
-                endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
-                where.deadline = { gte: now, lte: endOfWeek };
-            }
-            else if (deadline === 'overdue') {
-                where.deadline = { lt: now };
-                where.status = { not: 'completed' };
-            }
-        }
-        const userId = req.user.id;
-        const role = req.user.role;
-        const isPrivileged = roles_1.RoleGroups.STAFF.includes(role);
-        // Non-privileged users (employees) only see projects they are a member of
-        if (!isPrivileged) {
-            where.members = { some: { userId } };
-        }
+        const filterParams = {
+            showArchived: req.query.archived === 'true',
+            category: req.query.category,
+            status: req.query.status,
+            search: req.query.search,
+            managerId: req.query.managerId,
+            deadline: req.query.deadline,
+        };
         const paginationParams = (0, pagination_1.parsePagination)(req.query);
-        const [projects, total] = await Promise.all([
-            db_1.default.project.findMany({
-                where,
-                include: {
-                    owner: { select: { id: true, name: true, avatarColor: true } },
-                    members: {
-                        include: {
-                            user: { select: { id: true, name: true, avatarColor: true } },
-                        },
-                    },
-                    _count: { select: { tasks: true } },
-                },
-                orderBy: { createdAt: 'desc' },
-                skip: paginationParams.skip,
-                take: paginationParams.take,
-            }),
-            db_1.default.project.count({ where }),
-        ]);
-        // Add progress percentage and isMember flag
-        const projectsWithProgress = await Promise.all(projects.map(async (project) => {
-            const totalTasks = await db_1.default.task.count({
-                where: { projectId: project.id, parentTaskId: null, isDeleted: false },
-            });
-            const completedTasks = await db_1.default.task.count({
-                where: { projectId: project.id, status: 'completed', parentTaskId: null, isDeleted: false },
-            });
-            const isMember = project.members.some((m) => m.userId === req.user.id);
-            const isProjectManager = project.members.some((m) => m.userId === req.user.id && m.isProjectManager);
-            return {
-                ...project,
-                progress: totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0,
-                totalTasks,
-                completedTasks,
-                isMember,
-                isProjectManager,
-            };
-        }));
+        const { projects, total } = await project_service_1.ProjectService.getPaginatedProjects(filterParams, req.user, paginationParams);
         res.json({
-            ...(0, pagination_1.paginatedResponse)(projectsWithProgress, total, paginationParams),
+            ...(0, pagination_1.paginatedResponse)(projects, total, paginationParams),
             // Keep 'projects' root key for existing frontend
-            projects: projectsWithProgress
+            projects,
         });
     }
     catch (error) {
-        console.error('Get projects error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.getProjects = getProjects;
@@ -118,7 +39,7 @@ exports.getProjects = getProjects;
 const getCategories = async (req, res) => {
     try {
         const categories = await db_1.default.project.findMany({
-            where: { category: { not: null } },
+            where: { category: { not: null }, ...(req.user?.companyId ? { companyId: req.user.companyId } : {}) },
             select: { category: true },
             distinct: ['category'],
             orderBy: { category: 'asc' },
@@ -166,6 +87,11 @@ const getProjectById = async (req, res) => {
             res.status(403).json({ message: 'You are not a member of this project' });
             return;
         }
+        // TENANT ISOLATION: verify project belongs to user's company
+        if (req.user.companyId && project.companyId && project.companyId !== req.user.companyId) {
+            res.status(404).json({ message: 'Project not found' });
+            return;
+        }
         const totalTasks = project.tasks.length;
         const completedTasks = project.tasks.filter((t) => t.status === 'completed').length;
         res.json({
@@ -186,18 +112,13 @@ const getProjectById = async (req, res) => {
 };
 exports.getProjectById = getProjectById;
 // POST /api/projects — admin/super_admin only
-const createProject = async (req, res) => {
+const createProject = async (req, res, next) => {
     try {
-        const { name, description, status, startDate, deadline, memberIds, // Individual user IDs
-        category, templateId, clientId, departmentId, // Primary department
-        otherDepartmentIds, // Additional departments
-        projectManagerId // Explicitly chosen PM
-         } = req.body;
+        const { name, description, status, startDate, deadline, memberIds, category, templateId, clientId, departmentId, otherDepartmentIds, projectManagerId } = req.body;
         if (!name || !category || !startDate || !deadline) {
             res.status(400).json({ message: 'Project name, category, start date, and deadline are required' });
             return;
         }
-        // Verify deadline is not before start date
         if (new Date(deadline) < new Date(startDate)) {
             res.status(400).json({ message: 'Project deadline cannot be before the start date' });
             return;
@@ -209,103 +130,48 @@ const createProject = async (req, res) => {
             if (template) {
                 if (Array.isArray(template.tasks)) {
                     defaultTasks = template.tasks.map((t, index) => ({
-                        title: t.title,
-                        description: t.description || '',
-                        priority: ['low', 'medium', 'high', 'critical'].includes(t.priority) ? t.priority : 'medium',
-                        createdBy: req.user.id,
-                        position: index * 1024,
-                        status: 'pending' // Default status for new tasks
+                        title: t.title, description: t.description || '', priority: ['low', 'medium', 'high', 'critical'].includes(t.priority) ? t.priority : 'medium', createdBy: req.user.id, position: index * 1024, status: 'pending'
                     }));
                 }
                 if (Array.isArray(template.milestones)) {
-                    defaultMilestones = template.milestones.map((m) => ({
-                        title: m.title,
-                        description: m.description || '',
-                        status: 'pending'
-                    }));
+                    defaultMilestones = template.milestones.map((m) => ({ title: m.title, description: m.description || '', status: 'pending' }));
                 }
             }
         }
-        // --- Member Auto-Assignment Logic ---
-        const allMemberIdsSet = new Set(memberIds || []);
-        let finalProjectManagerId = projectManagerId || req.user.id;
-        // 1. Get users from Primary Department
-        let primaryDeptManagerId = null;
-        if (departmentId) {
-            const primaryDept = await db_1.default.department.findUnique({
-                where: { id: departmentId },
-                include: { users: { select: { id: true } } }
-            });
-            if (primaryDept) {
-                primaryDept.users.forEach(u => allMemberIdsSet.add(u.id));
-                primaryDeptManagerId = primaryDept.managerId;
-            }
-        }
-        // 2. Get users from Other Departments
-        if (otherDepartmentIds && otherDepartmentIds.length > 0) {
-            const otherDeptsUsers = await db_1.default.user.findMany({
-                where: { departmentId: { in: otherDepartmentIds }, status: 'ACTIVE' },
-                select: { id: true }
-            });
-            otherDeptsUsers.forEach(u => allMemberIdsSet.add(u.id));
-        }
-        // 3. Determine Project Manager
-        // Priority: Explicitly chosen PM > Primary Dept Manager > Project Creator
-        if (!projectManagerId) {
-            if (primaryDeptManagerId) {
-                finalProjectManagerId = primaryDeptManagerId;
-            }
-        }
-        // Ensure the PM and the creator are in the members set
-        allMemberIdsSet.add(req.user.id);
-        allMemberIdsSet.add(finalProjectManagerId);
-        const finalMemberIds = Array.from(allMemberIdsSet);
-        // --- End of Member Logic ---
+        // Rely on ProjectService to untangle the membership web
+        const { finalMemberIds, finalProjectManagerId } = await project_service_1.ProjectService.resolveProjectMembers(req.user.id, memberIds, projectManagerId, departmentId, otherDepartmentIds);
         const project = await db_1.default.project.create({
             data: {
-                name,
-                description,
-                status: status || 'planning',
-                category: category || null,
+                name, description, status: status || 'planning', category: category || null,
                 startDate: startDate ? new Date(startDate) : null,
                 deadline: deadline ? new Date(deadline) : null,
                 ownerId: req.user.id,
+                companyId: req.user.companyId || null,
                 clientId: clientId || null,
                 departmentId: departmentId || null,
                 members: {
-                    create: finalMemberIds.map((userId) => ({
-                        userId,
-                        isProjectManager: userId === finalProjectManagerId
-                    })),
+                    create: finalMemberIds.map((userId) => ({ userId, isProjectManager: userId === finalProjectManagerId })),
                 },
                 tasks: defaultTasks.length > 0 ? { create: defaultTasks } : undefined,
                 milestones: defaultMilestones.length > 0 ? { create: defaultMilestones } : undefined,
             },
             include: {
                 owner: { select: { id: true, name: true, avatarColor: true } },
-                members: {
-                    include: {
-                        user: { select: { id: true, name: true, avatarColor: true } },
-                    },
-                },
+                members: { include: { user: { select: { id: true, name: true, avatarColor: true } } } },
             },
         });
-        // Notify added members
         if (finalMemberIds.length > 0) {
             for (const memberId of finalMemberIds) {
-                if (memberId !== req.user.id) {
+                if (memberId !== req.user.id)
                     await (0, notification_service_1.notifyProjectAdded)(memberId, project.name, project.id, req.user.name);
-                }
             }
         }
         await (0, activity_service_1.logActivity)(req.user.id, 'CREATED_PROJECT', 'project', project.id, `Created project "${project.name}"`);
-        // Emit socket event for all clients
         (0, socket_1.getIO)().emit('project:created', project);
         res.status(201).json({ project: { ...project, progress: 0, totalTasks: 0, completedTasks: 0 } });
     }
     catch (error) {
-        console.error('Create project error:', error);
-        res.status(500).json({ message: 'Internal server error' });
+        next(error);
     }
 };
 exports.createProject = createProject;
@@ -323,6 +189,11 @@ const updateProject = async (req, res) => {
         }
         if (existing.isArchived || existing.isDeleted) {
             res.status(400).json({ message: 'Cannot update an archived or deleted project' });
+            return;
+        }
+        // TENANT ISOLATION: verify project belongs to user's company
+        if (req.user.companyId && existing.companyId && existing.companyId !== req.user.companyId) {
+            res.status(404).json({ message: 'Project not found' });
             return;
         }
         // Only super_admin can change ownerId
@@ -408,7 +279,7 @@ exports.deleteProject = deleteProject;
 const getDeletedProjects = async (req, res) => {
     try {
         const projects = await db_1.default.project.findMany({
-            where: { isDeleted: true },
+            where: { isDeleted: true, ...(req.user?.companyId ? { companyId: req.user.companyId } : {}) },
             include: {
                 owner: { select: { id: true, name: true, avatarColor: true } },
             },
@@ -466,6 +337,14 @@ const addMember = async (req, res) => {
         if (projectCheck.isArchived) {
             res.status(400).json({ message: 'Cannot add members to an archived project' });
             return;
+        }
+        // TENANT ISOLATION: verify the user being added belongs to the same company
+        if (req.user.companyId) {
+            const targetUser = await db_1.default.user.findUnique({ where: { id: userId }, select: { companyId: true } });
+            if (!targetUser || (targetUser.companyId && targetUser.companyId !== req.user.companyId)) {
+                res.status(400).json({ message: 'User not found or does not belong to your organization' });
+                return;
+            }
         }
         // Check authorization: admin, OR project manager of this specific project
         const isProjectManager = req.user.role === roles_1.Role.ADMIN || (await db_1.default.projectMember.findUnique({
