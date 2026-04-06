@@ -9,7 +9,12 @@ import path from 'path';
 
 dotenv.config();
 
+const CLIENT_URL = process.env.CLIENT_URL ? process.env.CLIENT_URL.replace(/\/$/, '') : 'http://localhost:5173';
+console.log(`[Config] Allowed Client Origin: ${CLIENT_URL}`);
+
 import { initSocket } from './config/socket';
+// ... (rest of imports remains the same)
+
 import authRoutes from './routes/auth.routes';
 import userRoutes from './routes/user.routes';
 import projectRoutes from './routes/project.routes';
