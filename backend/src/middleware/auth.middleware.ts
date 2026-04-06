@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { verify, TokenExpiredError } from 'jsonwebtoken';
 import prisma from '../config/db';
 
-export interface AuthRequest extends Request {
+export interface AuthRequest extends Request<any, any, any, any> {
   user?: {
     id: string;
     email: string;
